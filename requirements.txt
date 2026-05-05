@@ -1,0 +1,7 @@
+gradio>=4.0.0
+kokoro
+torch
+spaces
+soundfile
+num2words
+tqdm

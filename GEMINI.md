@@ -1,55 +1,81 @@
-# Kokoro TTS Web UI
+# Kokoro TTS Web UI & CLI
 
-A high-quality Text-to-Speech (TTS) web application built with [Gradio](https://gradio.app/) and powered by the [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model.
+A high-quality Text-to-Speech (TTS) application built with [Gradio](https://gradio.app/) and powered by the [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model.
 
 ## Project Overview
 
-This project provides a user-friendly interface for generating and streaming speech from text. It leverages the `kokoro` library for fast, high-quality synthesis with support for multiple voices and languages (currently US and UK English).
+This project provides a user-friendly interface and a command-line tool for generating and streaming speech from text. It leverages the `kokoro` library for fast, high-quality synthesis with support for multiple voices and languages.
+
+### Key Features
+- **Web UI**: Interactive Gradio interface for real-time synthesis and streaming.
+- **CLI Mode**: Batch process text files into audio chapters from the command line.
+- **Batch Export**: Automatically split long texts (like books) into chapters and export as WAV files or ZIP.
+- **Custom Pronunciation**: Support for Markdown link syntax for phonemes (e.g., `[Kokoro](/kˈOkəɹO/)`) and a custom replacement dictionary.
+- **Text Normalization**: Smart handling of years, abbreviations, and auto-skipping of reference/bibliography sections.
+- **Hardware Acceleration**: Support for both CPU and CUDA-enabled GPUs.
 
 ### Key Technologies
 - **Python**: Core logic and scripting.
-- **Gradio**: Web interface for interactive use and API access.
+- **Gradio**: Web interface for interactive use.
 - **Kokoro**: TTS engine (KModel and KPipeline).
 - **PyTorch**: Underlying deep learning framework.
 - **ZeroGPU (via `spaces`)**: Optional GPU acceleration for Hugging Face Spaces.
 
 ## Project Structure
 
-- `app.py`: Main application script containing the Gradio interface and TTS logic.
-- `en.txt`: A collection of random quotes used for the "Random Quote" feature.
-- `gatsby5k.md`, `frankenstein5k.md`: Sample long-form texts for testing synthesis.
-- `.venv/`: Python virtual environment containing dependencies.
+- `app.py`: Main entry point. Supports launching the Web UI or CLI.
+- `cli.py`: Logic for the Command-Line Interface.
+- `ui/`:
+  - `app.py`: Gradio UI definition and frontend logic.
+- `core/`:
+  - `engine.py`: TTS generation engine, model loading, and pipeline management.
+  - `text.py`: Text normalization, chapter splitting, and reference removal.
+- `en.txt`: A collection of random quotes for the "Random Quote" feature.
+- `gatsby5k.md`, `frankenstein5k.md`: Sample long-form texts for testing.
+- `requirements.txt`: Project dependencies.
+- `.venv/`: Python virtual environment.
 
 ## Building and Running
 
 ### Prerequisites
-- Python 3.12+ (as seen in `.venv`)
-- [ffmpeg](https://ffmpeg.org/) (usually required for Gradio/Audio processing)
+- Python 3.12+
+- [ffmpeg](https://ffmpeg.org/) (required for audio processing)
 
 ### Installation
-If setting up from scratch (assuming `requirements.txt` is missing but dependencies are known):
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install kokoro gradio torch spaces
-```
+1. Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ### Running the App
-Execute the main script to start the server:
+
+#### Web UI Mode
+Execute the main script without arguments to start the Gradio server:
 ```bash
 python app.py
 ```
-The application will be available at `http://localhost:40001`.
+The application will be available at `http://localhost:40001` (or as configured by `KOKORO_PORT`).
+
+#### CLI Mode
+Use the `--input` flag to process a text file into audio chapters:
+```bash
+python app.py --input my_book.txt --output-dir audio_output --voice af_heart --speed 1.0
+```
 
 ## Development Conventions
 
 - **Language Support**: Uses code `'a'` for American English and `'b'` for British English.
-- **Voice Packs**: Voice files are loaded dynamically based on selection (e.g., `af_heart`, `am_michael`).
-- **Custom Pronunciation**: Supports Markdown link syntax for phonemes, e.g., `[Kokoro](/kˈOkəɹO/)`.
-- **Streaming**: Supports real-time audio streaming using Gradio's streaming output.
-- **API**: The app is configured with `api_open=True`, allowing it to be used as a backend for other services.
+- **Voice Packs**: 20+ voices available (e.g., `af_heart`, `am_michael`, `bf_emma`).
+- **Phonemes**: Supports `[text](/phonemes/)` syntax for precise control.
+- **Streaming**: Supports real-time audio streaming in the Web UI.
 
 ## TODO / Future Improvements
-- [ ] Add explicit `requirements.txt` or `pyproject.toml` for easier setup.
-- [ ] Implement multi-language support beyond US/UK English if supported by the model.
-- [ ] Add unit tests for synthesis pipelines.
+- [ ] Add unit tests for synthesis pipelines and text normalization.
+- [ ] Implement multi-language support beyond US/UK English.
+- [ ] Add support for more audio formats (MP3, OGG).
+- [x] Add explicit `requirements.txt`.
