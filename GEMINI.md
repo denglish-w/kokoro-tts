@@ -29,7 +29,7 @@ This project provides a user-friendly interface and a command-line tool for gene
 - `ui/`:
   - `app.py`: Gradio UI definition and frontend logic.
 - `core/`:
-  - `engine.py`: TTS generation engine, hardware auto-detection, and model management.
+  - `engine.py`: TTS engine with lazy model loading, hardware auto-detection, and GPU-to-CPU fallback logic.
   - `text.py`: Text normalization, chapter splitting, and reference removal.
 - `en.txt`: A collection of random quotes for the "Random Quote" feature.
 - `requirements.txt`: Project dependencies.
@@ -68,15 +68,17 @@ python app.py
 Access the UI at `http://localhost:40001` (or your configured port).
 
 #### CLI Mode
-Use the `--input` flag to process a text file into audio chapters:
+Use the `--input` flag to process a text file into audio chapters. By default, audio is exported to `/mnt/c/Users/DavidEnglish/Documents/Kokoro_Exports`.
 ```bash
-python app.py --input my_book.txt --output-dir audio_output --voice af_heart --speed 1.0
+python app.py --input my_book.txt --voice af_heart --speed 1.0
 ```
 
 ## Development Conventions
 
+- **Lazy Loading**: Models and voices are loaded on demand during generation to minimize memory footprint and improve startup time.
+- **Hardware Detection**: The app automatically selects `cuda`, `mps`, or `cpu`. If a GPU error occurs during generation, it gracefully falls back to CPU.
+- **Export Naming**: Combined audio exports use the base filename of the input (e.g., `input.wav`) for better organization.
 - **Language Support**: Uses code `'a'` for American English and `'b'` for British English.
-- **Hardware Detection**: The app automatically selects `cuda`, `mps`, or `cpu` based on availability.
 - **Chapter Splitting**: Uses regex (default: `^Chapter\s+\d+`) to identify chapter breaks in text files.
 - **Streaming**: Supports real-time audio streaming in the Web UI.
 

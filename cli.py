@@ -36,7 +36,7 @@ def run_cli(args):
 def parse_args():
     parser = argparse.ArgumentParser(description='Kokoro-TTS CLI')
     parser.add_argument('--input', type=str, help='Input text file for batch processing')
-    parser.add_argument('--output-dir', type=str, default='output_audio', help='Directory to save audio chapters')
+    parser.add_argument('--output-dir', type=str, default='/mnt/c/Users/DavidEnglish/Documents/Kokoro_Exports', help='Directory to save audio chapters')
     parser.add_argument('--regex', type=str, default=r'^Chapter\s+\d+', help='Regex for splitting chapters')
     parser.add_argument('--voice', type=str, default='af_heart', help='Voice ID to use')
     parser.add_argument('--speed', type=float, default=1.0, help='Playback speed')

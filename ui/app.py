@@ -44,10 +44,7 @@ CHOICES = {
     '🇬🇧 🚹 Daniel': 'bm_daniel',
 }
 
-# Pre-load voices
-for v in CHOICES.values():
-    pipelines[v[0]].load_voice(v)
-
+# Voices are now loaded lazily on demand during generation
 # Read demo texts
 if os.path.exists('en.txt'):
     with open('en.txt', 'r') as r:
@@ -92,16 +89,16 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
     custom_dict = parse_custom_dict(dict_text)
     chapters = split_text_into_chapters(text, chapter_regex, custom_dict, skip_references=skip_references, skip_chapters_regex=skip_chapters_regex)
                 
+    base_name = os.path.splitext(os.path.basename(file_obj.name))[0]
+    
     if save_dir and os.path.isdir(save_dir):
         output_dir = save_dir
         should_zip = False
     else:
-        # Default to persistent exports directory in the workspace
-        workspace_dir = os.getcwd()
-        base_name = os.path.splitext(os.path.basename(file_obj.name))[0]
-        output_dir = os.path.join(workspace_dir, "exports", base_name)
+        # Default to C drive Documents directory
+        output_dir = os.path.join("/mnt/c/Users/DavidEnglish/Documents", "Kokoro_Exports", base_name)
         os.makedirs(output_dir, exist_ok=True)
-        should_zip = True
+        should_zip = False
         
     zip_path = os.path.join(output_dir, "audiobook.zip") if should_zip else None
     
@@ -206,7 +203,7 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
         
         if combine_audio and all_audio_chunks:
             combined_audio = np.concatenate(all_audio_chunks, axis=0)
-            wav_path = os.path.join(output_dir, "full_audiobook.wav")
+            wav_path = os.path.join(output_dir, f"{base_name}.wav")
             sf.write(wav_path, combined_audio, global_sample_rate)
             
             if audio_format == 'MP3':
@@ -215,10 +212,10 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
                 subprocess.run(['ffmpeg', '-y', '-i', wav_path, '-b:a', '192k', mp3_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 os.remove(wav_path)
                 final_path = mp3_path
-                final_name = "full_audiobook.mp3"
+                final_name = f"{base_name}.mp3"
             else:
                 final_path = wav_path
-                final_name = "full_audiobook.wav"
+                final_name = f"{base_name}.wav"
                 
             if should_zip:
                 zipf.write(final_path, arcname=final_name)
@@ -449,8 +446,8 @@ def create_ui():
                             sec_voice = gr.Dropdown(sec_voice_choices, value='None', label='Secondary Voice (Alternating Chapters)')
                         save_dir = gr.Textbox(
                             label='Local Save Directory (Optional)',
-                            info='If provided, saves files directly to this folder on your Mac instead of downloading a ZIP.',
-                            placeholder='/Users/davidenglish/Desktop/Audiobooks'
+                            info='If provided, saves files directly to this folder on your PC instead of downloading a ZIP.',
+                            placeholder='/mnt/c/Users/DavidEnglish/Documents/Kokoro_Exports'
                         )
                         export_btn = gr.Button('Generate & Export', variant='primary', size="lg")
                         download_file = gr.File(label='Download Audio (if no save dir)', interactive=False)

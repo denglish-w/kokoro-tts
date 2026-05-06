@@ -27,14 +27,22 @@ else:
 
 logger.info(f"Hardware Device: {DEVICE}")
 
-models = {gpu: KModel().to(DEVICE if gpu else 'cpu').eval() for gpu in [False] + ([True] if DEVICE != 'cpu' else [])}
+models = {}
+def get_model(use_gpu):
+    gpu_flag = use_gpu and DEVICE != 'cpu'
+    if gpu_flag not in models:
+        target_device = DEVICE if gpu_flag else 'cpu'
+        logger.info(f"Loading KModel to {target_device}...")
+        models[gpu_flag] = KModel().to(target_device).eval()
+    return models[gpu_flag]
+
 pipelines = {lang_code: KPipeline(lang_code=lang_code, model=False) for lang_code in 'ab'}
 pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
 pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
 
 @spaces.GPU(duration=30)
 def forward_gpu(ps, ref_s, speed):
-    return models[True](ps, ref_s, speed)
+    return get_model(True)(ps, ref_s, speed)
 
 def generate_first(text, voice='af_heart', speed=1, use_gpu=(DEVICE != 'cpu'), progress_callback=None, custom_dict=None, skip_references=True):
     text = normalize_text(text, custom_dict, skip_references=skip_references)
@@ -56,13 +64,13 @@ def generate_first(text, voice='af_heart', speed=1, use_gpu=(DEVICE != 'cpu'), p
             if use_gpu:
                 audio = forward_gpu(ps, ref_s, speed)
             else:
-                audio = models[False](ps, ref_s, speed)
+                audio = get_model(False)(ps, ref_s, speed)
         except gr.exceptions.Error as e:
             logger.warning(f"Error during GPU generation: {e}. Falling back to CPU.")
             if use_gpu:
                 gr.Warning(str(e))
                 gr.Info('Retrying with CPU. To avoid this error, change Hardware to CPU.')
-                audio = models[False](ps, ref_s, speed)
+                audio = get_model(False)(ps, ref_s, speed)
             else:
                 raise gr.Error(e)
         all_audio.append(audio)
@@ -102,13 +110,13 @@ def generate_all(text, voice='af_heart', speed=1, use_gpu=(DEVICE != 'cpu'), cus
             if use_gpu:
                 audio = forward_gpu(ps, ref_s, speed)
             else:
-                audio = models[False](ps, ref_s, speed)
+                audio = get_model(False)(ps, ref_s, speed)
         except gr.exceptions.Error as e:
             logger.warning(f"Error during GPU generation stream: {e}. Falling back to CPU.")
             if use_gpu:
                 gr.Warning(str(e))
                 gr.Info('Switching to CPU')
-                audio = models[False](ps, ref_s, speed)
+                audio = get_model(False)(ps, ref_s, speed)
             else:
                 raise gr.Error(e)
         yield 24000, audio.numpy()
