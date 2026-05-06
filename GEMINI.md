@@ -9,10 +9,10 @@ This project provides a user-friendly interface and a command-line tool for gene
 ### Key Features
 - **Web UI**: Interactive Gradio interface for real-time synthesis and streaming.
 - **CLI Mode**: Batch process text files into audio chapters from the command line.
-- **Batch Export**: Automatically split long texts (like books) into chapters and export as WAV files or ZIP.
+- **Batch Export**: Automatically split long texts (like books) into chapters and export as WAV/MP3 files or ZIP.
 - **Custom Pronunciation**: Support for Markdown link syntax for phonemes (e.g., `[Kokoro](/kˈOkəɹO/)`) and a custom replacement dictionary.
 - **Text Normalization**: Smart handling of years, abbreviations, and auto-skipping of reference/bibliography sections.
-- **Hardware Acceleration**: Support for both CPU and CUDA-enabled GPUs.
+- **Hardware Acceleration**: Support for CPU, CUDA-enabled GPUs, and Apple Silicon (MPS).
 
 ### Key Technologies
 - **Python**: Core logic and scripting.
@@ -77,5 +77,5 @@ python app.py --input my_book.txt --output-dir audio_output --voice af_heart --s
 ## TODO / Future Improvements
 - [ ] Add unit tests for synthesis pipelines and text normalization.
 - [ ] Implement multi-language support beyond US/UK English.
-- [ ] Add support for more audio formats (MP3, OGG).
+- [x] Add support for more audio formats (MP3).
 - [x] Add explicit `requirements.txt`.

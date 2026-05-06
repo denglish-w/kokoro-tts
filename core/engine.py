@@ -16,9 +16,18 @@ from core.text import normalize_text
 logger = logging.getLogger(__name__)
 
 CUDA_AVAILABLE = torch.cuda.is_available()
-logger.info(f"CUDA Available: {CUDA_AVAILABLE}")
+MPS_AVAILABLE = hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
 
-models = {gpu: KModel().to('cuda' if gpu else 'cpu').eval() for gpu in [False] + ([True] if CUDA_AVAILABLE else [])}
+if CUDA_AVAILABLE:
+    DEVICE = 'cuda'
+elif MPS_AVAILABLE:
+    DEVICE = 'mps'
+else:
+    DEVICE = 'cpu'
+
+logger.info(f"Hardware Device: {DEVICE}")
+
+models = {gpu: KModel().to(DEVICE if gpu else 'cpu').eval() for gpu in [False] + ([True] if DEVICE != 'cpu' else [])}
 pipelines = {lang_code: KPipeline(lang_code=lang_code, model=False) for lang_code in 'ab'}
 pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
 pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
@@ -27,19 +36,22 @@ pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
 def forward_gpu(ps, ref_s, speed):
     return models[True](ps, ref_s, speed)
 
-def generate_first(text, voice='af_heart', speed=1, use_gpu=CUDA_AVAILABLE, progress_callback=None, custom_dict=None, skip_references=True):
+def generate_first(text, voice='af_heart', speed=1, use_gpu=(DEVICE != 'cpu'), progress_callback=None, custom_dict=None, skip_references=True):
     text = normalize_text(text, custom_dict, skip_references=skip_references)
     if not text:
         return None, ''
     pipeline = pipelines[voice[0]]
     pack = pipeline.load_voice(voice)
-    use_gpu = use_gpu and CUDA_AVAILABLE
+    use_gpu = use_gpu and (DEVICE != 'cpu')
     all_audio = []
     all_ps = []
     
     logger.debug(f"Generating first audio segment for text: '{text[:50]}...' with voice {voice}")
     for graphemes, ps, _ in pipeline(text, voice, speed):
         ref_s = pack[len(ps)-1]
+        if use_gpu:
+            ref_s = ref_s.to(DEVICE)
+            
         try:
             if use_gpu:
                 audio = forward_gpu(ps, ref_s, speed)
@@ -73,16 +85,19 @@ def tokenize_first(text, voice='af_heart', custom_dict=None, skip_references=Tru
         all_ps.append(ps)
     return ' '.join(all_ps)
 
-def generate_all(text, voice='af_heart', speed=1, use_gpu=CUDA_AVAILABLE, custom_dict=None, skip_references=True):
+def generate_all(text, voice='af_heart', speed=1, use_gpu=(DEVICE != 'cpu'), custom_dict=None, skip_references=True):
     text = normalize_text(text, custom_dict, skip_references=skip_references)
     pipeline = pipelines[voice[0]]
     pack = pipeline.load_voice(voice)
-    use_gpu = use_gpu and CUDA_AVAILABLE
+    use_gpu = use_gpu and (DEVICE != 'cpu')
     first = True
     
     logger.debug(f"Streaming generation for text: '{text[:50]}...' with voice {voice}")
     for _, ps, _ in pipeline(text, voice, speed):
         ref_s = pack[len(ps)-1]
+        if use_gpu:
+            ref_s = ref_s.to(DEVICE)
+            
         try:
             if use_gpu:
                 audio = forward_gpu(ps, ref_s, speed)

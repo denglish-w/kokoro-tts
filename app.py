@@ -14,10 +14,13 @@ logging.basicConfig(
 # Silence phonemizer warnings
 logging.getLogger("phonemizer").setLevel(logging.ERROR)
 
+import warnings
+warnings.filterwarnings("ignore", message="An output with one or more elements was resized since it had shape")
+
 logger = logging.getLogger(__name__)
 
 from cli import parse_args, run_cli
-from ui.app import create_ui, theme, custom_css
+from ui.app import create_ui, theme, custom_css, dark_mode_js
 
 if __name__ == '__main__':
     args, unknown = parse_args()
@@ -39,5 +42,6 @@ if __name__ == '__main__':
             server_name=host, 
             server_port=port,
             theme=theme,
-            css=custom_css
+            css=custom_css,
+            js=dark_mode_js
         )

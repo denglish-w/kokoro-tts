@@ -80,7 +80,7 @@ def parse_custom_dict(text):
             d[k.strip()] = v.strip()
     return d
 
-def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, progress=gr.Progress()):
+def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, progress=gr.Progress()):
     if not file_obj:
         raise gr.Error("Please upload a text file.")
     
@@ -105,7 +105,12 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
     def update_progress(chunk_chars):
         processed_chars[0] += chunk_chars
         pct = min(processed_chars[0] / total_chars, 1.0)
+        
         elapsed = time.time() - start_time
+        e_mins, e_secs = divmod(int(elapsed), 60)
+        e_hrs, e_mins = divmod(e_mins, 60)
+        elapsed_str = f"{e_hrs}h {e_mins}m {e_secs}s" if e_hrs > 0 else f"{e_mins}m {e_secs}s"
+        
         if pct > 0:
             total_est = elapsed / pct
             remaining = max(total_est - elapsed, 0)
@@ -118,7 +123,7 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
         else:
             eta_str = "Calculating..."
             
-        progress(pct, desc=f"Rendering... ETA: {eta_str}")
+        progress(pct, desc=f"Elapsed: {elapsed_str} | ETA: {eta_str}")
 
     all_audio_chunks = []
     global_sample_rate = 24000
@@ -139,7 +144,6 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
                 chapter_text, 
                 current_voice, 
                 speed, 
-                use_gpu=CUDA_AVAILABLE,
                 progress_callback=update_progress,
                 custom_dict=custom_dict,
                 skip_references=skip_references
@@ -153,15 +157,39 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
                 else:
                     wav_path = os.path.join(output_dir, filename)
                     sf.write(wav_path, audio_np, sample_rate)
+                    
+                    if audio_format == 'MP3':
+                        import subprocess
+                        mp3_path = wav_path.replace('.wav', '.mp3')
+                        subprocess.run(['ffmpeg', '-y', '-i', wav_path, '-b:a', '192k', mp3_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        os.remove(wav_path)
+                        final_path = mp3_path
+                        final_name = filename.replace('.wav', '.mp3')
+                    else:
+                        final_path = wav_path
+                        final_name = filename
+                        
                     if should_zip:
-                        zipf.write(wav_path, arcname=filename)
+                        zipf.write(final_path, arcname=final_name)
         
         if combine_audio and all_audio_chunks:
             combined_audio = np.concatenate(all_audio_chunks, axis=0)
             wav_path = os.path.join(output_dir, "full_audiobook.wav")
             sf.write(wav_path, combined_audio, global_sample_rate)
+            
+            if audio_format == 'MP3':
+                import subprocess
+                mp3_path = wav_path.replace('.wav', '.mp3')
+                subprocess.run(['ffmpeg', '-y', '-i', wav_path, '-b:a', '192k', mp3_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                os.remove(wav_path)
+                final_path = mp3_path
+                final_name = "full_audiobook.mp3"
+            else:
+                final_path = wav_path
+                final_name = "full_audiobook.wav"
+                
             if should_zip:
-                zipf.write(wav_path, arcname="full_audiobook.wav")
+                zipf.write(final_path, arcname=final_name)
                 
     finally:
         if zipf:
@@ -191,6 +219,12 @@ custom_css = """
 .gradio-container {
     font-family: 'Inter', 'Roboto', sans-serif !important;
 }
+
+/* Hide the default raw seconds counter in Gradio progress bar */
+.progress-text.meta-text {
+    display: none !important;
+}
+
 
 /* Button enhancements */
 button.primary {
@@ -239,9 +273,38 @@ theme = gr.themes.Soft(
     button_primary_background_fill_hover="*primary_600",
 )
 
-def generate_first_ui(text, voice, speed, use_gpu, dict_text, skip_references):
+def generate_first_ui(text, voice, speed, use_gpu, dict_text, skip_references, progress=gr.Progress()):
     custom_dict = parse_custom_dict(dict_text)
-    return generate_first(text, voice, speed, use_gpu, custom_dict=custom_dict, skip_references=skip_references)
+    
+    import time
+    start_time = time.time()
+    total_chars = max(len(text), 1)
+    processed_chars = [0]
+    
+    def update_progress(chunk_chars):
+        processed_chars[0] += chunk_chars
+        pct = min(processed_chars[0] / total_chars, 1.0)
+        
+        elapsed = time.time() - start_time
+        e_mins, e_secs = divmod(int(elapsed), 60)
+        e_hrs, e_mins = divmod(e_mins, 60)
+        elapsed_str = f"{e_hrs}h {e_mins}m {e_secs}s" if e_hrs > 0 else f"{e_mins}m {e_secs}s"
+        
+        if pct > 0:
+            total_est = elapsed / pct
+            remaining = max(total_est - elapsed, 0)
+            mins, secs = divmod(int(remaining), 60)
+            hrs, mins = divmod(mins, 60)
+            if hrs > 0:
+                eta_str = f"{hrs}h {mins}m {secs}s"
+            else:
+                eta_str = f"{mins}m {secs}s"
+        else:
+            eta_str = "Calculating..."
+            
+        progress(pct, desc=f"Elapsed: {elapsed_str} | ETA: {eta_str}")
+
+    return generate_first(text, voice, speed, use_gpu, custom_dict=custom_dict, skip_references=skip_references, progress_callback=update_progress)
 
 def tokenize_first_ui(text, voice, dict_text, skip_references):
     custom_dict = parse_custom_dict(dict_text)
@@ -251,13 +314,18 @@ def generate_all_ui(text, voice, speed, use_gpu, dict_text, skip_references):
     custom_dict = parse_custom_dict(dict_text)
     yield from generate_all(text, voice, speed, use_gpu, custom_dict=custom_dict, skip_references=skip_references)
 
-def create_ui():
-    dark_mode_js = """
-    function() { 
-        document.body.classList.add('dark'); 
+dark_mode_js = """
+function() {
+    var url = new URL(window.location);
+    if (!url.searchParams.has('__theme')) {
+        url.searchParams.set('__theme', 'dark');
+        window.location.replace(url.href);
     }
-    """
-    with gr.Blocks(title="Kokoro TTS", js=dark_mode_js) as app:
+}
+"""
+
+def create_ui():
+    with gr.Blocks(title="Kokoro TTS") as app:
         gr.Markdown("# 🎙️ Kokoro Text-to-Speech")
         gr.Markdown("High-quality, fast TTS using the Kokoro-82M model. Enter text, select a voice, and generate!")
         
@@ -341,6 +409,7 @@ def create_ui():
                         )
                         with gr.Row():
                             combine_audio = gr.Checkbox(label="Combine into single audio file", value=False)
+                            audio_format = gr.Dropdown(['WAV', 'MP3'], value='WAV', label='Export Format')
                             sec_voice_choices = [('None', 'None')] + list(CHOICES.items())
                             sec_voice = gr.Dropdown(sec_voice_choices, value='None', label='Secondary Voice (Alternating Chapters)')
                         save_dir = gr.Textbox(
@@ -362,6 +431,6 @@ def create_ui():
         stream_event = stream_btn.click(fn=generate_all_ui, inputs=[text, voice, speed, use_gpu, dict_text, skip_references], outputs=[out_stream])
         stop_btn.click(fn=None, cancels=stream_event)
         
-        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex], outputs=[download_file])
+        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format], outputs=[download_file])
 
     return app
