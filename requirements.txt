@@ -3,5 +3,7 @@ kokoro
 torch
 spaces
 soundfile
+numpy
 num2words
 tqdm
+scipy
