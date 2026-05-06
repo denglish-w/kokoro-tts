@@ -9,7 +9,8 @@ This project provides a user-friendly interface and a command-line tool for gene
 ### Key Features
 - **Web UI**: Interactive Gradio interface for real-time synthesis and streaming.
 - **CLI Mode**: Batch process text files into audio chapters from the command line.
-- **Batch Export**: Automatically split long texts (like books) into chapters and export as WAV/MP3 files or ZIP.
+- **Batch Export**: Automatically split long texts (like books) into chapters and export as WAV/MP3 files or ZIP. Supports resuming interrupted exports.
+- **Persistent Settings**: Remembers your selected voice across browser sessions.
 - **Custom Pronunciation**: Support for Markdown link syntax for phonemes (e.g., `[Kokoro](/kˈOkəɹO/)`) and a custom replacement dictionary.
 - **Text Normalization**: Smart handling of years, abbreviations, and auto-skipping of reference/bibliography sections.
 - **Hardware Acceleration**: Support for CPU, CUDA-enabled GPUs, and Apple Silicon (MPS).
