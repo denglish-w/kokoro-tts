@@ -8,7 +8,7 @@ import logging
 import numpy as np
 
 from core.engine import generate_first, tokenize_first, generate_all, CUDA_AVAILABLE, pipelines
-from core.text import split_text_into_chapters
+from core.text import split_text_into_chapters, extract_text_from_pdf, scan_for_potential_abbreviations, clean_filename, extract_metadata_from_pdf, extract_metadata_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -77,30 +77,64 @@ def parse_custom_dict(text):
             d[k.strip()] = v.strip()
     return d
 
-def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, progress=gr.Progress()):
+def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, progress=gr.Progress()):
     if not file_obj:
-        raise gr.Error("Please upload a text file.")
+        raise gr.Error("Please upload a file.")
     
     import time
     logger.info(f"Exporting chapters for file: {file_obj.name}")
-    with open(file_obj.name, 'r', encoding='utf-8') as f:
-        text = f.read()
+    if file_obj.name.lower().endswith('.pdf'):
+        try:
+            text = extract_text_from_pdf(file_obj.name)
+        except Exception as e:
+            raise gr.Error(f"Failed to extract text from PDF: {e}")
+    else:
+        with open(file_obj.name, 'r', encoding='utf-8') as f:
+            text = f.read()
         
     custom_dict = parse_custom_dict(dict_text)
     chapters = split_text_into_chapters(text, chapter_regex, custom_dict, skip_references=skip_references, skip_chapters_regex=skip_chapters_regex)
                 
-    base_name = os.path.splitext(os.path.basename(file_obj.name))[0]
+    # Determine base name using metadata/UI overrides
+    author = meta_author.strip() if meta_author else ""
+    title_val = meta_title.strip() if meta_title else ""
     
-    if save_dir and os.path.isdir(save_dir):
-        output_dir = save_dir
-        should_zip = False
+    if not author or not title_val:
+        try:
+            if file_obj.name.lower().endswith('.pdf'):
+                meta = extract_metadata_from_pdf(file_obj.name)
+            else:
+                meta = extract_metadata_from_text(text)
+            if not author and meta.get("author"):
+                author = meta["author"]
+            if not title_val and meta.get("title"):
+                title_val = meta["title"]
+        except Exception:
+            pass
+            
+    meta_parts = []
+    if author:
+        meta_parts.append(clean_filename(author))
+    if title_val:
+        meta_parts.append(clean_filename(title_val))
+        
+    if meta_parts:
+        meta_base_name = " - ".join(meta_parts)
+        base_name = meta_base_name
     else:
-        # Default to C drive Documents directory
-        output_dir = os.path.join("/mnt/c/Users/DavidEnglish/Documents", "Kokoro_Exports", base_name)
+        meta_base_name = None
+        base_name = os.path.splitext(os.path.basename(file_obj.name))[0]
+    
+    if save_dir and os.path.isdir(os.path.expanduser(save_dir)):
+        output_dir = os.path.join(os.path.expanduser(save_dir), base_name)
         os.makedirs(output_dir, exist_ok=True)
         should_zip = False
+    else:
+        # Browser download mode: compile in a temp folder, zip it and present download
+        output_dir = tempfile.mkdtemp(prefix="kokoro_export_")
+        should_zip = True
         
-    zip_path = os.path.join(output_dir, "audiobook.zip") if should_zip else None
+    zip_path = os.path.join(output_dir, f"{base_name}.zip") if should_zip else None
     
     total_chars = sum(len(c[1]) for c in chapters)
     if total_chars == 0:
@@ -139,7 +173,13 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
 
     try:
         for idx, (title, chapter_text) in enumerate(chapters):
-            filename = f"{title}.wav"
+            if meta_base_name:
+                if title == "Full_Audio":
+                    filename = f"{meta_base_name}.wav"
+                else:
+                    filename = f"{meta_base_name} - {title}.wav"
+            else:
+                filename = f"{title}.wav"
             final_name = filename.replace('.wav', '.mp3') if audio_format == 'MP3' else filename
             final_path = os.path.join(output_dir, final_name)
             
@@ -230,6 +270,55 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
     else:
         logger.info(f"Finished exporting chapters to {output_dir}")
         return None
+
+def auto_extract_metadata(file_obj):
+    if not file_obj:
+        return "", ""
+    try:
+        if file_obj.name.lower().endswith('.pdf'):
+            meta = extract_metadata_from_pdf(file_obj.name)
+        else:
+            with open(file_obj.name, 'r', encoding='utf-8') as f:
+                text = f.read()
+            meta = extract_metadata_from_text(text)
+        return meta.get("title") or "", meta.get("author") or ""
+    except Exception as e:
+        logger.warning(f"Error auto-extracting metadata: {e}")
+        return "", ""
+
+
+def scan_abbreviations_ui(file_obj, dict_text):
+    if not file_obj:
+        raise gr.Error("Please upload a file first.")
+    
+    try:
+        if file_obj.name.lower().endswith('.pdf'):
+            text = extract_text_from_pdf(file_obj.name)
+        else:
+            with open(file_obj.name, 'r', encoding='utf-8') as f:
+                text = f.read()
+    except Exception as e:
+        raise gr.Error(f"Error reading file: {e}")
+        
+    current_dict = parse_custom_dict(dict_text) or {}
+    candidates = scan_for_potential_abbreviations(text, current_dict)
+    
+    if not candidates:
+        gr.Info("No new potential abbreviations found.")
+        return dict_text
+        
+    # Append the candidates to dict_text
+    new_lines = []
+    existing = dict_text.strip()
+    if existing:
+        new_lines.append(existing)
+        
+    new_lines.append("\n# Suggested Abbreviations (Edit values below):")
+    for word, count in candidates.items():
+        new_lines.append(f"{word}: {word}  # appears {count} times")
+        
+    gr.Info(f"Found {len(candidates)} potential new abbreviations. Appended to Custom Pronunciation Dictionary.")
+    return "\n".join(new_lines)
 
 TOKEN_NOTE = '''
 💡 Customize pronunciation with Markdown link syntax and /slashes/ like `[Kokoro](/kˈOkəɹO/)`
@@ -355,7 +444,7 @@ function() {
 
 def create_ui():
     with gr.Blocks(title="Kokoro TTS") as app:
-        browser_voice = gr.BrowserState("af_heart")
+        browser_voice = gr.BrowserState("am_michael")
         
         gr.Markdown("# 🎙️ Kokoro Text-to-Speech")
         gr.Markdown("High-quality, fast TTS using the Kokoro-82M model. Enter text, select a voice, and generate!")
@@ -373,7 +462,7 @@ def create_ui():
                 with gr.Row():
                     voice = gr.Dropdown(
                         list(CHOICES.items()), 
-                        value='af_heart', 
+                        value='am_michael', 
                         label='Voice', 
                         info='Quality and availability vary by language'
                     )
@@ -427,7 +516,11 @@ def create_ui():
 
                     # Batch Export Tab
                     with gr.Tab("📦 Batch Export", id="batch_tab"):
-                        upload_file = gr.File(label='Upload Text File (.txt)', file_types=['.txt'])
+                        upload_file = gr.File(label='Upload Text or PDF File (.txt, .pdf)', file_types=['.txt', '.pdf'])
+                        with gr.Row():
+                            meta_title = gr.Textbox(label="Title (Optional)", placeholder="Auto-detected on upload", info="Used for filenames and folders.")
+                            meta_author = gr.Textbox(label="Author (Optional)", placeholder="Auto-detected on upload", info="Used for filenames and folders.")
+                        scan_abbrev_btn = gr.Button('🔍 Scan File for New Abbreviations', variant='secondary')
                         chapter_regex = gr.Textbox(
                             label='Chapter Split Regex',
                             value=r'^(Part\s+[IVXLCDM]+|\d+)\s*$',
@@ -447,13 +540,13 @@ def create_ui():
                         save_dir = gr.Textbox(
                             label='Local Save Directory (Optional)',
                             info='If provided, saves files directly to this folder on your PC instead of downloading a ZIP.',
-                            placeholder='/mnt/c/Users/DavidEnglish/Documents/Kokoro_Exports'
+                            placeholder='~/Documents/Kokoro_Exports'
                         )
                         export_btn = gr.Button('Generate & Export', variant='primary', size="lg")
                         download_file = gr.File(label='Download Audio (if no save dir)', interactive=False)
 
         # Event Listeners
-        app.load(lambda x: x if x else "af_heart", inputs=[browser_voice], outputs=[voice])
+        app.load(lambda x: x if x else "am_michael", inputs=[browser_voice], outputs=[voice])
         voice.change(lambda x: x, inputs=[voice], outputs=[browser_voice])
         
         random_btn.click(fn=get_random_quote, inputs=[], outputs=[text])
@@ -466,6 +559,8 @@ def create_ui():
         stream_event = stream_btn.click(fn=generate_all_ui, inputs=[text, voice, speed, use_gpu, dict_text, skip_references], outputs=[out_stream])
         stop_btn.click(fn=None, cancels=stream_event)
         
-        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export], outputs=[download_file])
+        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author], outputs=[download_file])
+        scan_abbrev_btn.click(fn=scan_abbreviations_ui, inputs=[upload_file, dict_text], outputs=[dict_text])
+        upload_file.change(fn=auto_extract_metadata, inputs=[upload_file], outputs=[meta_title, meta_author])
 
     return app

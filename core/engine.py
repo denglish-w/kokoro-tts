@@ -44,7 +44,7 @@ pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
 def forward_gpu(ps, ref_s, speed):
     return get_model(True)(ps, ref_s, speed)
 
-def generate_first(text, voice='af_heart', speed=1, use_gpu=(DEVICE != 'cpu'), progress_callback=None, custom_dict=None, skip_references=True):
+def generate_first(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'), progress_callback=None, custom_dict=None, skip_references=True):
     text = normalize_text(text, custom_dict, skip_references=skip_references)
     if not text:
         return None, ''
@@ -85,7 +85,7 @@ def generate_first(text, voice='af_heart', speed=1, use_gpu=(DEVICE != 'cpu'), p
     full_audio = torch.cat(all_audio)
     return (24000, full_audio.numpy()), ' '.join(all_ps)
 
-def tokenize_first(text, voice='af_heart', custom_dict=None, skip_references=True):
+def tokenize_first(text, voice='am_michael', custom_dict=None, skip_references=True):
     text = normalize_text(text, custom_dict, skip_references=skip_references)
     pipeline = pipelines[voice[0]]
     all_ps = []
@@ -93,7 +93,7 @@ def tokenize_first(text, voice='af_heart', custom_dict=None, skip_references=Tru
         all_ps.append(ps)
     return ' '.join(all_ps)
 
-def generate_all(text, voice='af_heart', speed=1, use_gpu=(DEVICE != 'cpu'), custom_dict=None, skip_references=True):
+def generate_all(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'), custom_dict=None, skip_references=True):
     text = normalize_text(text, custom_dict, skip_references=skip_references)
     pipeline = pipelines[voice[0]]
     pack = pipeline.load_voice(voice)
