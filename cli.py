@@ -69,16 +69,31 @@ def run_cli(args):
     else:
         base_name = os.path.splitext(os.path.basename(args.input))[0]
 
+    import time
+    total_start_time = time.time()
     chapters = split_text_into_chapters(text, args.regex, custom_dict=custom_dict)
     logger.info(f"Found {len(chapters)} chapters. Starting synthesis...")
 
     output_dir = os.path.expanduser(args.output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
+    total_duration = 0.0
     for title_key, chapter_text in tqdm(chapters, desc="Generating Chapters"):
+        chapter_start = time.time()
         audio_data, _ = generate_first(chapter_text, args.voice, args.speed, use_gpu=args.gpu, custom_dict=custom_dict)
+        chapter_elapsed = time.time() - chapter_start
+        
         if audio_data:
             sample_rate, audio_np = audio_data
+            duration = len(audio_np) / sample_rate
+            total_duration += duration
+            
+            speed_ratio = duration / chapter_elapsed if chapter_elapsed > 0 else 0
+            char_rate = len(chapter_text) / chapter_elapsed if chapter_elapsed > 0 else 0
+            
+            logger.info(f"Synthesized '{title_key}' ({len(chapter_text)} chars) in {chapter_elapsed:.2f}s | "
+                        f"Audio: {duration:.2f}s ({speed_ratio:.2fx} RT speed, {char_rate:.1f} chars/s)")
+            
             # Dynamically rename based upon author/title
             if title_key == "Full_Audio":
                 filename = f"{base_name}.wav"
@@ -88,7 +103,14 @@ def run_cli(args):
             sf.write(output_path, audio_np, sample_rate)
             logger.debug(f"Saved {output_path}")
 
-    logger.info(f"Done! Audio files saved to {output_dir}")
+    total_elapsed = time.time() - total_start_time
+    m, s = divmod(total_elapsed, 60)
+    h, m = divmod(m, 60)
+    time_str = f"{int(h):02d}:{int(m):02d}:{int(s):02d}" if h > 0 else f"{int(m):02d}:{int(s):02d}"
+    
+    avg_speed_ratio = total_duration / total_elapsed if total_elapsed > 0 else 0
+    logger.info(f"Done! Synthesized {len(chapters)} chapters in {time_str} ({total_elapsed:.2f}s) | "
+                f"Total Audio: {total_duration:.2f}s ({avg_speed_ratio:.2fx} average RT speed)")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Kokoro-TTS CLI')
