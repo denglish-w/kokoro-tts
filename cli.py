@@ -92,7 +92,7 @@ def run_cli(args):
             char_rate = len(chapter_text) / chapter_elapsed if chapter_elapsed > 0 else 0
             
             logger.info(f"Synthesized '{title_key}' ({len(chapter_text)} chars) in {chapter_elapsed:.2f}s | "
-                        f"Audio: {duration:.2f}s ({speed_ratio:.2fx} RT speed, {char_rate:.1f} chars/s)")
+                        f"Audio: {duration:.2f}s ({speed_ratio:.2f}x RT speed, {char_rate:.1f} chars/s)")
             
             # Dynamically rename based upon author/title
             if title_key == "Full_Audio":
@@ -101,7 +101,19 @@ def run_cli(args):
                 filename = f"{base_name} - {title_key}.wav"
             output_path = os.path.join(output_dir, filename)
             sf.write(output_path, audio_np, sample_rate)
-            logger.debug(f"Saved {output_path}")
+            
+            if args.format.lower() == 'mp3':
+                import subprocess
+                mp3_path = output_path.replace('.wav', '.mp3')
+                logger.debug(f"Converting '{filename}' to MP3...")
+                subprocess.run(['ffmpeg', '-y', '-i', output_path, '-b:a', args.bitrate, mp3_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.path.exists(mp3_path):
+                    os.remove(output_path)
+                    logger.debug(f"Saved {mp3_path}")
+                else:
+                    logger.error(f"Failed to convert '{filename}' to MP3 (is ffmpeg installed?)")
+            else:
+                logger.debug(f"Saved {output_path}")
 
     total_elapsed = time.time() - total_start_time
     m, s = divmod(total_elapsed, 60)
@@ -110,7 +122,7 @@ def run_cli(args):
     
     avg_speed_ratio = total_duration / total_elapsed if total_elapsed > 0 else 0
     logger.info(f"Done! Synthesized {len(chapters)} chapters in {time_str} ({total_elapsed:.2f}s) | "
-                f"Total Audio: {total_duration:.2f}s ({avg_speed_ratio:.2fx} average RT speed)")
+                f"Total Audio: {total_duration:.2f}s ({avg_speed_ratio:.2f}x average RT speed)")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Kokoro-TTS CLI')
@@ -123,5 +135,7 @@ def parse_args():
     parser.add_argument('--scan-abbrev', action='store_true', help='Scan for unrecognized abbreviations and prompt interactively to expand them')
     parser.add_argument('--title', type=str, help='Manual override for Title metadata (used in filenames)')
     parser.add_argument('--author', type=str, help='Manual override for Author metadata (used in filenames)')
+    parser.add_argument('--format', type=str, choices=['wav', 'mp3'], default='wav', help='Output audio format')
+    parser.add_argument('--bitrate', type=str, default='192k', help='MP3 bitrate (e.g. 192k, 64k, 32k)')
     
     return parser.parse_known_args()
