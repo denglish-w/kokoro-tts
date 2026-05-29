@@ -9,6 +9,12 @@ from core.text import split_text_into_chapters, extract_text_from_pdf, scan_for_
 logger = logging.getLogger(__name__)
 
 def run_cli(args):
+    if args.format.lower() == 'mp3':
+        import shutil
+        if not shutil.which('ffmpeg'):
+            logger.error("Error: ffmpeg is not installed or not in the system PATH. Please install ffmpeg to use MP3 format.")
+            return
+
     logger.info(f"Reading {args.input}...")
     try:
         if args.input.lower().endswith('.pdf'):

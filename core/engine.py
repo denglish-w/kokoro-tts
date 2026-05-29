@@ -65,14 +65,19 @@ def generate_first(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'),
                 audio = forward_gpu(ps, ref_s, speed)
             else:
                 audio = get_model(False)(ps, ref_s, speed)
-        except gr.exceptions.Error as e:
+        except Exception as e:
             logger.warning(f"Error during GPU generation: {e}. Falling back to CPU.")
             if use_gpu:
-                gr.Warning(str(e))
-                gr.Info('Retrying with CPU. To avoid this error, change Hardware to CPU.')
+                try:
+                    gr.Warning(str(e))
+                    gr.Info('Retrying with CPU. To avoid this error, change Hardware to CPU.')
+                except Exception:
+                    pass
                 audio = get_model(False)(ps, ref_s, speed)
             else:
-                raise gr.Error(e)
+                if isinstance(e, gr.exceptions.Error):
+                    raise gr.Error(e)
+                raise e
         all_audio.append(audio)
         all_ps.append(ps)
         
@@ -111,14 +116,19 @@ def generate_all(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'), c
                 audio = forward_gpu(ps, ref_s, speed)
             else:
                 audio = get_model(False)(ps, ref_s, speed)
-        except gr.exceptions.Error as e:
+        except Exception as e:
             logger.warning(f"Error during GPU generation stream: {e}. Falling back to CPU.")
             if use_gpu:
-                gr.Warning(str(e))
-                gr.Info('Switching to CPU')
+                try:
+                    gr.Warning(str(e))
+                    gr.Info('Switching to CPU')
+                except Exception:
+                    pass
                 audio = get_model(False)(ps, ref_s, speed)
             else:
-                raise gr.Error(e)
+                if isinstance(e, gr.exceptions.Error):
+                    raise gr.Error(e)
+                raise e
         yield 24000, audio.numpy()
         if first:
             first = False

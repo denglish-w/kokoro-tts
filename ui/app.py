@@ -74,10 +74,17 @@ def parse_custom_dict(text):
     for line in text.split('\n'):
         if ':' in line:
             k, v = line.split(':', 1)
-            d[k.strip()] = v.strip()
+            k_clean = k.strip()
+            if k_clean:
+                d[k_clean] = v.strip()
     return d
 
 def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, progress=gr.Progress()):
+    if audio_format == 'MP3':
+        import shutil
+        if not shutil.which('ffmpeg'):
+            raise gr.Error("ffmpeg is not installed or not in the system PATH. Please install ffmpeg to use MP3 export features.")
+
     if not file_obj:
         raise gr.Error("Please upload a file.")
     
