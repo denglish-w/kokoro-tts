@@ -77,7 +77,13 @@ def run_cli(args):
 
     import time
     total_start_time = time.time()
-    chapters = split_text_into_chapters(text, args.regex, custom_dict=custom_dict)
+    chapters = split_text_into_chapters(
+        text, 
+        args.regex, 
+        custom_dict=custom_dict, 
+        strip_chapter_outlines=args.strip_outlines, 
+        skip_discussion_questions=args.skip_discussion
+    )
     logger.info(f"Found {len(chapters)} chapters. Starting synthesis...")
 
     output_dir = os.path.expanduser(args.output_dir)
@@ -143,5 +149,9 @@ def parse_args():
     parser.add_argument('--author', type=str, help='Manual override for Author metadata (used in filenames)')
     parser.add_argument('--format', type=str, choices=['wav', 'mp3'], default='wav', help='Output audio format')
     parser.add_argument('--bitrate', type=str, default='192k', help='MP3 bitrate (e.g. 192k, 64k, 32k)')
+    parser.add_argument('--strip-outlines', action='store_true', default=True, help='Strip repeated chapter outlines')
+    parser.add_argument('--no-strip-outlines', action='store_false', dest='strip_outlines', help='Do not strip repeated chapter outlines')
+    parser.add_argument('--skip-discussion', action='store_true', default=True, help='Skip Discussion and Response sections')
+    parser.add_argument('--no-skip-discussion', action='store_false', dest='skip_discussion', help='Do not skip Discussion and Response sections')
     
     return parser.parse_known_args()

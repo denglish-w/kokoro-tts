@@ -229,25 +229,128 @@ def normalize_text(text, custom_dict=None, skip_references=True):
         
     return text
 
-def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_references=True, skip_chapters_regex=None):
+def strip_discussion_sections(text):
+    """
+    Strips out 'Discussion and Response' or 'Discussion Questions' sections.
+    Stops skipping if it encounters a major, unindented section header (e.g., 'Conclusion').
+    """
+    lines = text.split('\n')
+    out_lines = []
+    i = 0
+    skipping = False
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        
+        if not skipping:
+            if re.match(r'^\s*(discussion\s+and\s+response|discussion\s+questions)\b', stripped, re.IGNORECASE):
+                skipping = True
+                i += 1
+                continue
+            out_lines.append(line)
+            i += 1
+        else:
+            # Stop skipping if we hit a major header
+            is_unindented = len(line) > 0 and not line.startswith(' ') and not line.startswith('\t')
+            is_header_like = is_unindented and len(stripped) < 50 and not re.match(r'^(\d+[\.\)]|•|\*)', stripped)
+            
+            if is_header_like:
+                skipping = False
+                out_lines.append(line)
+                i += 1
+            else:
+                i += 1
+                
+    return '\n'.join(out_lines).strip()
+
+def do_strip_chapter_outlines(chapter_text, chapter_titles):
+    """
+    Strips the repeated table of contents / outlines at the beginning of a chapter.
+    """
+    lines = chapter_text.split('\n')
+    out_lines = []
+    i = 0
+    
+    def normalize_for_match(s):
+        s = s.lower().strip()
+        s = s.replace('“', '"').replace('”', '"').replace("‘", "'").replace("’", "'")
+        return s
+        
+    normalized_titles = {normalize_for_match(t) for t in chapter_titles}
+    
+    while i < len(lines):
+        line = lines[i]
+        stripped_line = line.strip()
+        
+        if normalized_titles and normalize_for_match(stripped_line) in normalized_titles and i < 25:
+            # Found a match, skip all contiguous matching lines or empty lines
+            while i < len(lines):
+                next_line = lines[i]
+                next_stripped = next_line.strip()
+                if not next_stripped:
+                    i += 1
+                    continue
+                if normalize_for_match(next_stripped) in normalized_titles:
+                    i += 1
+                else:
+                    break
+            continue
+        else:
+            out_lines.append(line)
+            i += 1
+            
+    return '\n'.join(out_lines).strip()
+
+def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_references=True, skip_chapters_regex=None, strip_chapter_outlines=True, skip_discussion_questions=True):
     text = normalize_text(text, custom_dict, skip_references=skip_references)
+    
+    # Extract chapter titles for stripping outlines if requested
+    chapter_titles = set()
+    if strip_chapter_outlines and chapter_regex.strip():
+        try:
+            matches = list(re.finditer(chapter_regex, text, flags=re.MULTILINE | re.IGNORECASE))
+            for i in range(len(matches)):
+                start = matches[i].start()
+                end = matches[i+1].start() if i + 1 < len(matches) else len(text)
+                chapter_content = text[start:end].strip()
+                content_lines = [line.strip() for line in chapter_content.split('\n') if line.strip()]
+                for line in content_lines[:3]:
+                    if len(line) > 2 and len(line) < 100:
+                        chapter_titles.add(line)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Error extracting chapter titles: {e}")
+
     chapters = []
     if not chapter_regex.strip():
-        chapters.append(("Full_Audio", text))
+        processed_text = text
+        if skip_discussion_questions:
+            processed_text = strip_discussion_sections(processed_text)
+        chapters.append(("Full_Audio", processed_text))
     else:
         matches = list(re.finditer(chapter_regex, text, flags=re.MULTILINE | re.IGNORECASE))
         if not matches:
-            chapters.append(("Full_Audio", text))
+            processed_text = text
+            if skip_discussion_questions:
+                processed_text = strip_discussion_sections(processed_text)
+            chapters.append(("Full_Audio", processed_text))
         else:
             if matches[0].start() > 0:
                 intro = text[:matches[0].start()].strip()
                 if intro:
+                    if skip_discussion_questions:
+                        intro = strip_discussion_sections(intro)
                     chapters.append(("00_Intro", intro))
             
             for i in range(len(matches)):
                 start = matches[i].start()
                 end = matches[i+1].start() if i + 1 < len(matches) else len(text)
                 chapter_text = text[start:end].strip()
+                
+                if strip_chapter_outlines and chapter_titles:
+                    chapter_text = do_strip_chapter_outlines(chapter_text, chapter_titles)
+                if skip_discussion_questions:
+                    chapter_text = strip_discussion_sections(chapter_text)
                 
                 title = matches[i].group(0).strip()
                 title = re.sub(r'[\\/*?:"<>|]', "", title)
