@@ -79,7 +79,7 @@ def parse_custom_dict(text):
                 d[k_clean] = v.strip()
     return d
 
-def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations, progress=gr.Progress()):
+def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations, split_columns, progress=gr.Progress()):
     if audio_format == 'MP3':
         import shutil
         if not shutil.which('ffmpeg'):
@@ -92,7 +92,7 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
     logger.info(f"Exporting chapters for file: {file_obj.name}")
     if file_obj.name.lower().endswith('.pdf'):
         try:
-            text = extract_text_from_pdf(file_obj.name)
+            text = extract_text_from_pdf(file_obj.name, split_columns=split_columns)
         except Exception as e:
             raise gr.Error(f"Failed to extract text from PDF: {e}")
     else:
@@ -304,13 +304,13 @@ def auto_extract_metadata(file_obj):
         return "", ""
 
 
-def scan_abbreviations_ui(file_obj, dict_text):
+def scan_abbreviations_ui(file_obj, dict_text, split_columns=False):
     if not file_obj:
         raise gr.Error("Please upload a file first.")
     
     try:
         if file_obj.name.lower().endswith('.pdf'):
-            text = extract_text_from_pdf(file_obj.name)
+            text = extract_text_from_pdf(file_obj.name, split_columns=split_columns)
         else:
             with open(file_obj.name, 'r', encoding='utf-8') as f:
                 text = f.read()
@@ -554,6 +554,7 @@ def create_ui():
                         with gr.Row():
                             strip_grid_matrices = gr.Checkbox(label="Strip Grid Matrices (OCR Table Garble)", value=True)
                             skip_scripture_citations = gr.Checkbox(label="Skip Scripture Citations", value=True)
+                            split_columns = gr.Checkbox(label="Split Double-Column PDFs", value=False)
                         with gr.Row():
                             resume_export = gr.Checkbox(label="Resume Export (Skip existing files)", value=True)
                             combine_audio = gr.Checkbox(label="Combine into single audio file", value=False)
@@ -582,8 +583,8 @@ def create_ui():
         stream_event = stream_btn.click(fn=generate_all_ui, inputs=[text, voice, speed, use_gpu, dict_text, skip_references], outputs=[out_stream])
         stop_btn.click(fn=None, cancels=stream_event)
         
-        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations], outputs=[download_file])
-        scan_abbrev_btn.click(fn=scan_abbreviations_ui, inputs=[upload_file, dict_text], outputs=[dict_text])
+        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations, split_columns], outputs=[download_file])
+        scan_abbrev_btn.click(fn=scan_abbreviations_ui, inputs=[upload_file, dict_text, split_columns], outputs=[dict_text])
         upload_file.change(fn=auto_extract_metadata, inputs=[upload_file], outputs=[meta_title, meta_author])
 
     return app

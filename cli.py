@@ -18,7 +18,7 @@ def run_cli(args):
     logger.info(f"Reading {args.input}...")
     try:
         if args.input.lower().endswith('.pdf'):
-            text = extract_text_from_pdf(args.input)
+            text = extract_text_from_pdf(args.input, split_columns=args.split_columns)
         else:
             with open(args.input, 'r', encoding='utf-8') as f:
                 text = f.read()
@@ -159,5 +159,6 @@ def parse_args():
     parser.add_argument('--no-strip-grid', action='store_false', dest='strip_grid', help='Do not strip flattened grid matrices')
     parser.add_argument('--skip-citations', action='store_true', default=True, help='Skip parenthetical scripture citations')
     parser.add_argument('--no-skip-citations', action='store_false', dest='skip_citations', help='Do not skip parenthetical scripture citations')
+    parser.add_argument('--split-columns', action='store_true', default=False, help='Split double-column layout PDFs horizontally')
     
     return parser.parse_known_args()

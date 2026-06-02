@@ -474,9 +474,10 @@ def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_referen
 
     return chapters
 
-def extract_text_from_pdf(pdf_path):
+def extract_text_from_pdf(pdf_path, split_columns=False):
     """
     Extracts text page-by-page from a PDF file.
+    Supports splitting double-column layout PDFs by using a coordinate-based visitor.
     """
     try:
         from pypdf import PdfReader
@@ -486,7 +487,28 @@ def extract_text_from_pdf(pdf_path):
     reader = PdfReader(pdf_path)
     text_parts = []
     for page in reader.pages:
-        text = page.extract_text()
+        if split_columns:
+            mb = page.mediabox
+            width = mb.right - mb.left
+            midpoint = mb.left + (width / 2)
+            
+            parts_left = []
+            parts_right = []
+            
+            def visitor(text, cm, tm, fontDict, fontSize):
+                # tm[4] is the horizontal offset (X coordinate)
+                if tm and len(tm) > 4:
+                    x = tm[4]
+                    if x < midpoint:
+                        parts_left.append(text)
+                    else:
+                        parts_right.append(text)
+            
+            page.extract_text(visitor_text=visitor)
+            text = "".join(parts_left) + "\n" + "".join(parts_right)
+        else:
+            text = page.extract_text()
+            
         if text:
             text_parts.append(text)
     return "\n".join(text_parts)
