@@ -273,6 +273,7 @@ def do_strip_chapter_outlines(chapter_text, chapter_titles):
     
     def normalize_for_match(s):
         s = s.lower().strip()
+        s = s.replace('An ', '').replace('A ', '')
         s = s.replace('“', '"').replace('”', '"').replace("‘", "'").replace("’", "'")
         return s
         
@@ -282,7 +283,9 @@ def do_strip_chapter_outlines(chapter_text, chapter_titles):
         line = lines[i]
         stripped_line = line.strip()
         
-        if normalized_titles and normalize_for_match(stripped_line) in normalized_titles and i < 25:
+        is_indented = line.startswith(' ') or line.startswith('\t')
+        
+        if is_indented and normalized_titles and normalize_for_match(stripped_line) in normalized_titles and i < 25:
             # Found a match, skip all contiguous matching lines or empty lines
             while i < len(lines):
                 next_line = lines[i]
@@ -290,7 +293,8 @@ def do_strip_chapter_outlines(chapter_text, chapter_titles):
                 if not next_stripped:
                     i += 1
                     continue
-                if normalize_for_match(next_stripped) in normalized_titles:
+                is_next_indented = next_line.startswith(' ') or next_line.startswith('\t')
+                if is_next_indented and normalize_for_match(next_stripped) in normalized_titles:
                     i += 1
                 else:
                     break
@@ -301,8 +305,98 @@ def do_strip_chapter_outlines(chapter_text, chapter_titles):
             
     return '\n'.join(out_lines).strip()
 
-def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_references=True, skip_chapters_regex=None, strip_chapter_outlines=True, skip_discussion_questions=True):
+def strip_scripture_citations(text):
+    """
+    Strips out parenthetical scripture citations (e.g. (John 3:16)).
+    """
+    books_pattern = r'\b(Gen|Exod|Lev|Num|Deut|Josh|Judg|Ruth|Sam|Kings?|Kgs|Chr|Chron|Ezra|Neh|Esth|Job|Ps|Pss|Psalm|Psalms|Prov|Proverbs|Eccl|Ecclesiastes|Cant|Song|Isa|Isaiah|Jer|Jeremiah|Lam|Lamentations|Ezek|Ezekiel|Dan|Daniel|Hos|Hosea|Joel|Amos|Obad|Obadiah|Jonah|Mic|Micah|Nah|Nahum|Hab|Habakkuk|Zeph|Zephaniah|Hag|Haggai|Zech|Zechariah|Mal|Malachi|Matt|Matthew|Mark|Luke|John|Acts|Rom|Romans?|Cor|Corinthians|Gal|Galatians|Eph|Ephesians|Phil|Philippians|Col|Colossians|Thess|Thessalonians|Tim|Timothy|Titus|Philem|Philemon|Heb|Hebrews|James|Pet|Peter|Jude|Rev|Revelation)\.?'
+    citation_regex = re.compile(
+        rf'\(\s*[1-3]?\s*{books_pattern}\s*[^)]*\d+\s*:\s*\d+[^)]*\)',
+        re.IGNORECASE
+    )
+    return citation_regex.sub('', text)
+
+def normalize_chapter_header(chapter_text):
+    """
+    Normalizes chapter titles like 'CHAPTER 12\n\nTitle' to 'Chapter 12: Title'.
+    """
+    lines = chapter_text.split('\n')
+    if len(lines) >= 3:
+        first_non_empty = -1
+        second_non_empty = -1
+        for idx, line in enumerate(lines):
+            if line.strip():
+                if first_non_empty == -1:
+                    first_non_empty = idx
+                elif second_non_empty == -1:
+                    second_non_empty = idx
+                    break
+        
+        if first_non_empty != -1 and second_non_empty != -1:
+            first_line = lines[first_non_empty].strip()
+            second_line = lines[second_non_empty].strip()
+            
+            if re.match(r'^(chapter|part)\s+\d+$', first_line, re.IGNORECASE):
+                prefix = first_line.capitalize()
+                combined_header = f"{prefix}: {second_line}"
+                new_lines = []
+                for idx, line in enumerate(lines):
+                    if idx == first_non_empty:
+                        new_lines.append(combined_header)
+                    elif idx == second_non_empty:
+                        continue
+                    else:
+                        new_lines.append(line)
+                return '\n'.join(new_lines)
+    return chapter_text
+
+def strip_grid_matrices_logic(text):
+    """
+    Strips the flattened grid matrices (OCR table garble).
+    """
+    lines = text.split('\n')
+    out_lines = []
+    i = 0
+    skipping = False
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        
+        if not skipping:
+            if i + 2 < len(lines) and \
+               "Cognition: Thought and Belief" in lines[i] and \
+               "Affection: Desire and Feeling" in lines[i+1] and \
+               "Volition: Will and Choice" in lines[i+2]:
+                skipping = True
+                i += 3
+                continue
+            out_lines.append(line)
+            i += 1
+        else:
+            is_unindented = len(line) > 0 and not line.startswith(' ') and not line.startswith('\t')
+            is_heading = is_unindented and (
+                "reading" in stripped.lower() or 
+                "reflecting" in stripped.lower() or 
+                "relating" in stripped.lower() or 
+                "renewal" in stripped.lower() or 
+                "helping" in stripped.lower()
+            )
+            if is_heading:
+                skipping = False
+                out_lines.append(line)
+                i += 1
+            else:
+                i += 1
+    return '\n'.join(out_lines)
+
+def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_references=True, skip_chapters_regex=None, strip_chapter_outlines=True, skip_discussion_questions=True, strip_grid_matrices=True, skip_scripture_citations=True):
     text = normalize_text(text, custom_dict, skip_references=skip_references)
+    
+    if skip_scripture_citations:
+        text = strip_scripture_citations(text)
+    
+    # Strip brackets (e.g. [choice] -> choice)
+    text = text.replace('[', '').replace(']', '')
     
     # Extract chapter titles for stripping outlines if requested
     chapter_titles = set()
@@ -314,9 +408,12 @@ def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_referen
                 end = matches[i+1].start() if i + 1 < len(matches) else len(text)
                 chapter_content = text[start:end].strip()
                 content_lines = [line.strip() for line in chapter_content.split('\n') if line.strip()]
-                for line in content_lines[:3]:
-                    if len(line) > 2 and len(line) < 100:
-                        chapter_titles.add(line)
+                # content_lines[0] is the match (e.g., "12" or "CHAPTER 12")
+                # content_lines[1] is the actual title line
+                if len(content_lines) > 1:
+                    title_candidate = content_lines[1]
+                    if len(title_candidate) > 2 and len(title_candidate) < 100:
+                        chapter_titles.add(title_candidate)
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(f"Error extracting chapter titles: {e}")
@@ -324,6 +421,8 @@ def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_referen
     chapters = []
     if not chapter_regex.strip():
         processed_text = text
+        if strip_grid_matrices:
+            processed_text = strip_grid_matrices_logic(processed_text)
         if skip_discussion_questions:
             processed_text = strip_discussion_sections(processed_text)
         chapters.append(("Full_Audio", processed_text))
@@ -331,6 +430,8 @@ def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_referen
         matches = list(re.finditer(chapter_regex, text, flags=re.MULTILINE | re.IGNORECASE))
         if not matches:
             processed_text = text
+            if strip_grid_matrices:
+                processed_text = strip_grid_matrices_logic(processed_text)
             if skip_discussion_questions:
                 processed_text = strip_discussion_sections(processed_text)
             chapters.append(("Full_Audio", processed_text))
@@ -338,6 +439,8 @@ def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_referen
             if matches[0].start() > 0:
                 intro = text[:matches[0].start()].strip()
                 if intro:
+                    if strip_grid_matrices:
+                        intro = strip_grid_matrices_logic(intro)
                     if skip_discussion_questions:
                         intro = strip_discussion_sections(intro)
                     chapters.append(("00_Intro", intro))
@@ -349,8 +452,12 @@ def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_referen
                 
                 if strip_chapter_outlines and chapter_titles:
                     chapter_text = do_strip_chapter_outlines(chapter_text, chapter_titles)
+                if strip_grid_matrices:
+                    chapter_text = strip_grid_matrices_logic(chapter_text)
                 if skip_discussion_questions:
                     chapter_text = strip_discussion_sections(chapter_text)
+                
+                chapter_text = normalize_chapter_header(chapter_text)
                 
                 title = matches[i].group(0).strip()
                 title = re.sub(r'[\\/*?:"<>|]', "", title)

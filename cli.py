@@ -82,7 +82,9 @@ def run_cli(args):
         args.regex, 
         custom_dict=custom_dict, 
         strip_chapter_outlines=args.strip_outlines, 
-        skip_discussion_questions=args.skip_discussion
+        skip_discussion_questions=args.skip_discussion,
+        strip_grid_matrices=args.strip_grid,
+        skip_scripture_citations=args.skip_citations
     )
     logger.info(f"Found {len(chapters)} chapters. Starting synthesis...")
 
@@ -153,5 +155,9 @@ def parse_args():
     parser.add_argument('--no-strip-outlines', action='store_false', dest='strip_outlines', help='Do not strip repeated chapter outlines')
     parser.add_argument('--skip-discussion', action='store_true', default=True, help='Skip Discussion and Response sections')
     parser.add_argument('--no-skip-discussion', action='store_false', dest='skip_discussion', help='Do not skip Discussion and Response sections')
+    parser.add_argument('--strip-grid', action='store_true', default=True, help='Strip flattened grid matrices')
+    parser.add_argument('--no-strip-grid', action='store_false', dest='strip_grid', help='Do not strip flattened grid matrices')
+    parser.add_argument('--skip-citations', action='store_true', default=True, help='Skip parenthetical scripture citations')
+    parser.add_argument('--no-skip-citations', action='store_false', dest='skip_citations', help='Do not skip parenthetical scripture citations')
     
     return parser.parse_known_args()

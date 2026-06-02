@@ -79,7 +79,7 @@ def parse_custom_dict(text):
                 d[k_clean] = v.strip()
     return d
 
-def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, progress=gr.Progress()):
+def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations, progress=gr.Progress()):
     if audio_format == 'MP3':
         import shutil
         if not shutil.which('ffmpeg'):
@@ -107,7 +107,9 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
         skip_references=skip_references, 
         skip_chapters_regex=skip_chapters_regex,
         strip_chapter_outlines=strip_chapter_outlines,
-        skip_discussion_questions=skip_discussion_questions
+        skip_discussion_questions=skip_discussion_questions,
+        strip_grid_matrices=strip_grid_matrices,
+        skip_scripture_citations=skip_scripture_citations
     )
                 
     # Determine base name using metadata/UI overrides
@@ -550,6 +552,9 @@ def create_ui():
                             strip_chapter_outlines = gr.Checkbox(label="Strip Repeated Chapter Outlines", value=True)
                             skip_discussion_questions = gr.Checkbox(label="Skip Discussion & Response Sections", value=True)
                         with gr.Row():
+                            strip_grid_matrices = gr.Checkbox(label="Strip Grid Matrices (OCR Table Garble)", value=True)
+                            skip_scripture_citations = gr.Checkbox(label="Skip Scripture Citations", value=True)
+                        with gr.Row():
                             resume_export = gr.Checkbox(label="Resume Export (Skip existing files)", value=True)
                             combine_audio = gr.Checkbox(label="Combine into single audio file", value=False)
                             audio_format = gr.Dropdown(['WAV', 'MP3'], value='WAV', label='Export Format')
@@ -577,7 +582,7 @@ def create_ui():
         stream_event = stream_btn.click(fn=generate_all_ui, inputs=[text, voice, speed, use_gpu, dict_text, skip_references], outputs=[out_stream])
         stop_btn.click(fn=None, cancels=stream_event)
         
-        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions], outputs=[download_file])
+        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations], outputs=[download_file])
         scan_abbrev_btn.click(fn=scan_abbreviations_ui, inputs=[upload_file, dict_text], outputs=[dict_text])
         upload_file.change(fn=auto_extract_metadata, inputs=[upload_file], outputs=[meta_title, meta_author])
 
