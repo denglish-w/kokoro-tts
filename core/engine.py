@@ -44,8 +44,8 @@ pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
 def forward_gpu(ps, ref_s, speed):
     return get_model(True)(ps, ref_s, speed)
 
-def generate_first(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'), progress_callback=None, custom_dict=None, skip_references=True):
-    text = normalize_text(text, custom_dict, skip_references=skip_references)
+def generate_first(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'), progress_callback=None, custom_dict=None, skip_references=True, replace_em_dashes=True, clean_template_placeholders=True):
+    text = normalize_text(text, custom_dict, skip_references=skip_references, replace_em_dashes=replace_em_dashes, clean_template_placeholders=clean_template_placeholders)
     if not text:
         return None, ''
     pipeline = pipelines[voice[0]]
@@ -89,17 +89,17 @@ def generate_first(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'),
         
     full_audio = torch.cat(all_audio)
     return (24000, full_audio.numpy()), ' '.join(all_ps)
-
-def tokenize_first(text, voice='am_michael', custom_dict=None, skip_references=True):
-    text = normalize_text(text, custom_dict, skip_references=skip_references)
+ 
+def tokenize_first(text, voice='am_michael', custom_dict=None, skip_references=True, replace_em_dashes=True, clean_template_placeholders=True):
+    text = normalize_text(text, custom_dict, skip_references=skip_references, replace_em_dashes=replace_em_dashes, clean_template_placeholders=clean_template_placeholders)
     pipeline = pipelines[voice[0]]
     all_ps = []
     for _, ps, _ in pipeline(text, voice):
         all_ps.append(ps)
     return ' '.join(all_ps)
-
-def generate_all(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'), custom_dict=None, skip_references=True):
-    text = normalize_text(text, custom_dict, skip_references=skip_references)
+ 
+def generate_all(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'), custom_dict=None, skip_references=True, replace_em_dashes=True, clean_template_placeholders=True):
+    text = normalize_text(text, custom_dict, skip_references=skip_references, replace_em_dashes=replace_em_dashes, clean_template_placeholders=clean_template_placeholders)
     pipeline = pipelines[voice[0]]
     pack = pipeline.load_voice(voice)
     use_gpu = use_gpu and (DEVICE != 'cpu')

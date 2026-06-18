@@ -19,17 +19,18 @@ warnings.filterwarnings("ignore", message="An output with one or more elements w
 
 logger = logging.getLogger(__name__)
 
-from cli import parse_args, run_cli
-from ui.app import create_ui, theme, custom_css, dark_mode_js
+from cli import parse_args
 
 if __name__ == '__main__':
     args, unknown = parse_args()
     
     if args.input:
         logger.info("Starting in CLI mode...")
+        from cli import run_cli
         run_cli(args)
     else:
         logger.info("Starting in Web UI mode...")
+        from ui.app import create_ui, theme, custom_css, dark_mode_js
         app = create_ui()
         
         # Get configuration from environment variables

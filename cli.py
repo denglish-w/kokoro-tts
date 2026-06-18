@@ -1,14 +1,22 @@
 import os
 import argparse
-import soundfile as sf
-from tqdm import tqdm
 import logging
-from core.engine import generate_first
-from core.text import split_text_into_chapters, extract_text_from_pdf, scan_for_potential_abbreviations, clean_filename, extract_metadata_from_pdf, extract_metadata_from_text
 
 logger = logging.getLogger(__name__)
 
 def run_cli(args):
+    import soundfile as sf
+    from tqdm import tqdm
+    from core.engine import generate_first
+    from core.text import (
+        split_text_into_chapters,
+        extract_text_from_pdf,
+        scan_for_potential_abbreviations,
+        clean_filename,
+        extract_metadata_from_pdf,
+        extract_metadata_from_text
+    )
+
     if args.format.lower() == 'mp3':
         import shutil
         if not shutil.which('ffmpeg'):
@@ -84,7 +92,12 @@ def run_cli(args):
         strip_chapter_outlines=args.strip_outlines, 
         skip_discussion_questions=args.skip_discussion,
         strip_grid_matrices=args.strip_grid,
-        skip_scripture_citations=args.skip_citations
+        skip_scripture_citations=args.skip_citations,
+        format_epigraphs=args.format_epigraphs,
+        format_bullet_lists=args.format_bullets,
+        expand_scripture_citations=args.expand_citations,
+        clean_template_placeholders=args.clean_placeholders,
+        replace_em_dashes=args.replace_em_dashes
     )
     logger.info(f"Found {len(chapters)} chapters. Starting synthesis...")
 
@@ -94,7 +107,15 @@ def run_cli(args):
     total_duration = 0.0
     for title_key, chapter_text in tqdm(chapters, desc="Generating Chapters"):
         chapter_start = time.time()
-        audio_data, _ = generate_first(chapter_text, args.voice, args.speed, use_gpu=args.gpu, custom_dict=custom_dict)
+        audio_data, _ = generate_first(
+            chapter_text, 
+            args.voice, 
+            args.speed, 
+            use_gpu=args.gpu, 
+            custom_dict=custom_dict,
+            replace_em_dashes=args.replace_em_dashes,
+            clean_template_placeholders=args.clean_placeholders
+        )
         chapter_elapsed = time.time() - chapter_start
         
         if audio_data:
@@ -160,5 +181,14 @@ def parse_args():
     parser.add_argument('--skip-citations', action='store_true', default=True, help='Skip parenthetical scripture citations')
     parser.add_argument('--no-skip-citations', action='store_false', dest='skip_citations', help='Do not skip parenthetical scripture citations')
     parser.add_argument('--split-columns', action='store_true', default=False, help='Split double-column layout PDFs horizontally')
+    parser.add_argument('--format-epigraphs', action='store_true', default=True, help='Format epigraphs and quotes block')
+    parser.add_argument('--no-format-epigraphs', action='store_false', dest='format_epigraphs', help='Do not format epigraphs and quotes')
+    parser.add_argument('--format-bullets', action='store_true', default=True, help='Format bullet points list to sequences')
+    parser.add_argument('--no-format-bullets', action='store_false', dest='format_bullets', help='Do not format bullet points list to sequences')
+    parser.add_argument('--expand-citations', action='store_true', default=False, help='Expand inline scripture reference abbreviations to spoken text')
+    parser.add_argument('--clean-placeholders', action='store_true', default=True, help='Clean template placeholders to generic words')
+    parser.add_argument('--no-clean-placeholders', action='store_false', dest='clean_placeholders', help='Do not clean template placeholders')
+    parser.add_argument('--replace-em-dashes', action='store_true', default=True, help='Replace em dashes with pauses (comma)')
+    parser.add_argument('--no-replace-em-dashes', action='store_false', dest='replace_em_dashes', help='Do not replace em dashes with pauses')
     
     return parser.parse_known_args()

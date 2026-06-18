@@ -195,7 +195,7 @@ def remove_reference_sections(text):
             
     return '\n'.join(out_lines)
 
-def normalize_text(text, custom_dict=None, skip_references=True):
+def normalize_text(text, custom_dict=None, skip_references=True, replace_em_dashes=True, clean_template_placeholders=True):
     # Auto-skip reference sections first
     if skip_references:
         text = remove_reference_sections(text)
@@ -205,6 +205,14 @@ def normalize_text(text, custom_dict=None, skip_references=True):
     
     # Remove footnote markers like [1], [12], (1), ^1
     text = re.sub(r'\[\d+\]|\(\d+\)|\^\d+', '', text)
+    
+    # Clean template placeholders first if requested
+    if clean_template_placeholders:
+        text = clean_placeholders(text)
+    
+    # Replace em dashes with pauses (comma) if requested
+    if replace_em_dashes:
+        text = text.replace('—', ', ').replace('--', ', ')
     
     # Normalize 4-digit years (1000-2099) to read as "sixteen forty-five"
     def year_to_words(match):
@@ -316,6 +324,209 @@ def strip_scripture_citations(text):
     )
     return citation_regex.sub('', text)
 
+def title_case_heading(s):
+    small_words = {'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'so', 'the', 'to', 'up', 'yet', 'is', 'with', 'from', 'into'}
+    words = s.split()
+    if not words:
+        return s
+    result = []
+    for idx, word in enumerate(words):
+        clean_word = re.sub(r'^\W+|\W+$', '', word).lower()
+        if clean_word in small_words and idx > 0 and idx < len(words) - 1:
+            result.append(word.lower())
+        else:
+            first_alpha = re.search(r'[A-Za-z]', word)
+            if first_alpha:
+                pos = first_alpha.start()
+                capitalized = word[:pos] + word[pos].upper() + word[pos+1:].lower()
+                result.append(capitalized)
+            else:
+                result.append(word.capitalize())
+    return ' '.join(result)
+
+def format_epigraphs_logic(text):
+    lines = text.split('\n')
+    out_lines = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        stripped = line.strip()
+        if stripped and not stripped.startswith('—') and not stripped.startswith('--') and not stripped.startswith('–'):
+            quote_lines = []
+            j = i
+            while j < n and lines[j].strip() and not lines[j].strip().startswith('—') and not lines[j].strip().startswith('--') and not lines[j].strip().startswith('–'):
+                quote_lines.append(lines[j].strip())
+                j += 1
+            
+            attr_idx = j
+            while attr_idx < n and not lines[attr_idx].strip():
+                attr_idx += 1
+                
+            if attr_idx < n:
+                attr_stripped = lines[attr_idx].strip()
+                match = re.match(r'^(—|--|–)\s*(.+)$', attr_stripped)
+                if match:
+                    author = match.group(2).strip()
+                    quote_content = " ".join(quote_lines)
+                    rewritten = f'... Quote by {author}: "{quote_content}" ...'
+                    out_lines.append("")
+                    out_lines.append(rewritten)
+                    out_lines.append("")
+                    i = attr_idx + 1
+                    continue
+                    
+        out_lines.append(line)
+        i += 1
+    return "\n".join(out_lines)
+
+def format_bullet_lists_logic(text):
+    lines = text.split('\n')
+    out_lines = []
+    i = 0
+    n = len(lines)
+    sequence_words = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth"]
+    
+    while i < n:
+        line = lines[i]
+        is_bullet = False
+        bullet_char = ""
+        bullet_match = re.match(r'^(\s*)([•\*\-])(\s+)(.*)$', line)
+        if bullet_match:
+            bullet_char = bullet_match.group(2)
+            content = bullet_match.group(4).strip()
+            if content and not all(c == bullet_char for c in content):
+                is_bullet = True
+                
+        if is_bullet:
+            bullet_lines = []
+            j = i
+            while j < n:
+                curr_line = lines[j]
+                curr_match = re.match(r'^(\s*)([•\*\-])(\s+)(.*)$', curr_line)
+                if curr_match:
+                    curr_char = curr_match.group(2)
+                    curr_content = curr_match.group(4).strip()
+                    if curr_content and not all(c == curr_char for c in curr_content):
+                        bullet_lines.append((curr_line, curr_match.group(1), curr_match.group(3), curr_content))
+                        j += 1
+                        continue
+                break
+                
+            if len(bullet_lines) > 1:
+                for idx, (orig_line, indent, spaces, content) in enumerate(bullet_lines):
+                    if idx < len(sequence_words):
+                        word = sequence_words[idx]
+                    else:
+                        word = f"Number {idx + 1}"
+                    new_line = f"{indent}{word}, {content}"
+                    out_lines.append(new_line)
+                i = j
+                continue
+            else:
+                out_lines.append(line)
+                i += 1
+                continue
+        else:
+            out_lines.append(line)
+            i += 1
+            
+    return "\n".join(out_lines)
+
+def expand_scripture_citations_logic(text):
+    books_pattern = r'\b(?:Gen|Exod|Lev|Num|Deut|Josh|Judg|Ruth|Sam|Kings?|Kgs|Chr|Chron|Ezra|Neh|Esth|Job|Ps|Pss|Psalm|Psalms|Prov|Proverbs|Eccl|Ecclesiastes|Cant|Song|Isa|Isaiah|Jer|Jeremiah|Lam|Lamentations|Ezek|Ezekiel|Dan|Daniel|Hos|Hosea|Joel|Amos|Obad|Obadiah|Jonah|Mic|Micah|Nah|Nahum|Hab|Habakkuk|Zeph|Zechariah|Zech|Mal|Malachi|Matt|Matthew|Mark|Luke|John|Acts|Rom|Romans?|Cor|Corinthians|Gal|Galatians|Eph|Ephesians|Phil|Philippians|Col|Colossians|Thess|Thessalonians|Tim|Timothy|Titus|Philem|Philemon|Heb|Hebrews|James|Pet|Peter|Jude|Rev|Revelation)\b'
+    citation_regex = re.compile(
+        rf'\(\s*([1-3]?\s*{books_pattern}\.?\s*\d+\s*:\s*\d+[^)]*)\)',
+        re.IGNORECASE
+    )
+    
+    SCRIPTURE_BOOKS = {
+        'gen': 'Genesis', 'exod': 'Exodus', 'lev': 'Leviticus', 'num': 'Numbers', 'deut': 'Deuteronomy',
+        'josh': 'Joshua', 'judg': 'Judges', 'ruth': 'Ruth', '1 sam': 'First Samuel', '2 sam': 'Second Samuel',
+        '1 kgs': 'First Kings', '2 kgs': 'Second Kings', '1 chr': 'First Chronicles', '2 chr': 'Second Chronicles',
+        'ezra': 'Ezra', 'neh': 'Nehemiah', 'esth': 'Esther', 'job': 'Job', 'ps': 'Psalm', 'pss': 'Psalms',
+        'prov': 'Proverbs', 'eccl': 'Ecclesiastes', 'cant': 'Song of Solomon', 'isa': 'Isaiah', 'jer': 'Jeremiah',
+        'lam': 'Lamentations', 'ezek': 'Ezekiel', 'dan': 'Daniel', 'hos': 'Hosea', 'joel': 'Joel', 'amos': 'Amos',
+        'obad': 'Obadiah', 'jonah': 'Jonah', 'mic': 'Micah', 'nah': 'Nahum', 'hab': 'Habakkuk', 'zeph': 'Zephaniah',
+        'hag': 'Haggai', 'zech': 'Zechariah', 'mal': 'Malachi', 'matt': 'Matthew', 'mark': 'Mark', 'luke': 'Luke',
+        'john': 'John', 'acts': 'Acts', 'rom': 'Romans', '1 cor': 'First Corinthians', '2 cor': 'Second Corinthians',
+        'gal': 'Galatians', 'eph': 'Ephesians', 'phil': 'Philippians', 'col': 'Colossians',
+        '1 thess': 'First Thessalonians', '2 thess': 'Second Thessalonians', '1 tim': 'First Timothy',
+        '2 tim': 'Second Timothy', 'titus': 'Titus', 'philem': 'Philemon', 'heb': 'Hebrews', 'james': 'James',
+        '1 pet': 'First Peter', '2 pet': 'Second Peter', '1 john': 'First John', '2 john': 'Second John',
+        '3 john': 'Third John', 'jude': 'Jude', 'rev': 'Revelation'
+    }
+
+    def replacer(match):
+        citation_content = match.group(1)
+        parts = citation_content.split(';')
+        expansions = []
+        for part in parts:
+            part_stripped = part.strip()
+            part_match = re.match(r'^([1-3]?\s*[A-Za-z]+)\.?\s*(\d+)\s*:\s*(\d+)(?:[\u2013\u2014-]\s*(\d+))?$', part_stripped)
+            if part_match:
+                book = part_match.group(1).strip()
+                chapter = part_match.group(2)
+                verse_start = part_match.group(3)
+                verse_end = part_match.group(4)
+                
+                book_clean = re.sub(r'\s+', ' ', book).lower()
+                book_full = SCRIPTURE_BOOKS.get(book_clean, book)
+                
+                chapter_text = f"chapter {chapter}"
+                if verse_end:
+                    verses_text = f"verses {verse_start} to {verse_end}"
+                else:
+                    verses_text = f"verse {verse_start}"
+                
+                expansions.append(f"{book_full} {chapter_text}, {verses_text}")
+            else:
+                expansions.append(part_stripped)
+        
+        if len(expansions) > 1:
+            expanded_str = ", ".join(expansions[:-1]) + ", and " + expansions[-1]
+        else:
+            expanded_str = expansions[0]
+            
+        return f"({expanded_str})"
+
+    return citation_regex.sub(replacer, text)
+
+def clean_placeholders(text):
+    PLACEHOLDER_REPLACEMENTS = {
+        r'\[specific person\]': 'that person',
+        r'\[someone\]': 'someone',
+        r'\[particular person\]': 'that person',
+        r'\[spouse/close friend\]': 'your spouse or close friend',
+        r'\[something\]': 'something',
+        r'\[specific choices\]': 'your choices',
+        r'\[specific choice\]': 'your choice',
+        r'\[choice\]': 'your choice',
+        r'\[specific desire\(s\)\]': 'your desires',
+        r'\[specific desire\]': 'your desire',
+        r'\[ruling desires\]': 'your desires',
+        r'\[specific emotion\]': 'your feelings',
+        r'\[particular emotion\]': 'your feelings',
+        r'\[situation\]': 'the situation',
+        r'\[particular difficult situation\]': 'the situation',
+        r'\[specific truth\]': 'the truth',
+        r'\[attributes of God or insight from Scripture\]': "God's attributes",
+        r'\[music, TV, books\]': 'music, TV, or books',
+        r'\[statement\]': 'your statement',
+        r'\[key aspect of created, fallen, redeemed, newly created\]': 'a key aspect of your identity',
+        r'\[specific number\]': 'a specific number',
+        r'\[specific Scripture\]': 'Scripture',
+        r'\[particular belief\]': 'your belief',
+        r'\[specific voices, whether relationships, media, etc\.\]': 'specific voices',
+        r'\[specific pursuits\]': 'your pursuits',
+    }
+    
+    for pattern, replacement in PLACEHOLDER_REPLACEMENTS.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        
+    text = text.replace('[', '').replace(']', '')
+    return text
+
 def normalize_chapter_header(chapter_text):
     """
     Normalizes chapter titles like 'CHAPTER 12\n\nTitle' to 'Chapter 12: Title'.
@@ -338,7 +549,10 @@ def normalize_chapter_header(chapter_text):
             
             if re.match(r'^(chapter|part)\s+\d+$', first_line, re.IGNORECASE):
                 prefix = first_line.capitalize()
-                combined_header = f"{prefix}: {second_line}"
+                title_parts = second_line.split(':')
+                title_cased_parts = [title_case_heading(p.strip()) for p in title_parts]
+                cleaned_title = ' — '.join(title_cased_parts)
+                combined_header = f"{prefix}: {cleaned_title}"
                 new_lines = []
                 for idx, line in enumerate(lines):
                     if idx == first_non_empty:
@@ -389,14 +603,26 @@ def strip_grid_matrices_logic(text):
                 i += 1
     return '\n'.join(out_lines)
 
-def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_references=True, skip_chapters_regex=None, strip_chapter_outlines=True, skip_discussion_questions=True, strip_grid_matrices=True, skip_scripture_citations=True):
-    text = normalize_text(text, custom_dict, skip_references=skip_references)
+def split_text_into_chapters(text, chapter_regex, custom_dict=None, skip_references=True, skip_chapters_regex=None, strip_chapter_outlines=True, skip_discussion_questions=True, strip_grid_matrices=True, skip_scripture_citations=True, format_epigraphs=True, format_bullet_lists=True, expand_scripture_citations=False, clean_template_placeholders=True, replace_em_dashes=True):
+    text = normalize_text(text, custom_dict, skip_references=skip_references, replace_em_dashes=False, clean_template_placeholders=clean_template_placeholders)
     
     if skip_scripture_citations:
         text = strip_scripture_citations(text)
+    elif expand_scripture_citations:
+        text = expand_scripture_citations_logic(text)
+        
+    if format_epigraphs:
+        text = format_epigraphs_logic(text)
+        
+    if replace_em_dashes:
+        text = text.replace('—', ', ').replace('--', ', ')
+        
+    if format_bullet_lists:
+        text = format_bullet_lists_logic(text)
     
-    # Strip brackets (e.g. [choice] -> choice)
-    text = text.replace('[', '').replace(']', '')
+    # Strip brackets fallback if template placeholder cleaning was disabled
+    if not clean_template_placeholders:
+        text = text.replace('[', '').replace(']', '')
     
     # Extract chapter titles for stripping outlines if requested
     chapter_titles = set()

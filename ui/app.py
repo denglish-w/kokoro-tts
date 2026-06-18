@@ -79,7 +79,7 @@ def parse_custom_dict(text):
                 d[k_clean] = v.strip()
     return d
 
-def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations, split_columns, progress=gr.Progress()):
+def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations, split_columns, format_epigraphs, format_bullet_lists, expand_scripture_citations, clean_template_placeholders, replace_em_dashes, progress=gr.Progress()):
     if audio_format == 'MP3':
         import shutil
         if not shutil.which('ffmpeg'):
@@ -109,7 +109,12 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
         strip_chapter_outlines=strip_chapter_outlines,
         skip_discussion_questions=skip_discussion_questions,
         strip_grid_matrices=strip_grid_matrices,
-        skip_scripture_citations=skip_scripture_citations
+        skip_scripture_citations=skip_scripture_citations,
+        format_epigraphs=format_epigraphs,
+        format_bullet_lists=format_bullet_lists,
+        expand_scripture_citations=expand_scripture_citations,
+        clean_template_placeholders=clean_template_placeholders,
+        replace_em_dashes=replace_em_dashes
     )
                 
     # Determine base name using metadata/UI overrides
@@ -232,7 +237,9 @@ def export_chapters_ui(file_obj, voice, speed, chapter_regex, combine_audio, sav
                 speed, 
                 progress_callback=update_progress,
                 custom_dict=custom_dict,
-                skip_references=skip_references
+                skip_references=skip_references,
+                replace_em_dashes=replace_em_dashes,
+                clean_template_placeholders=clean_template_placeholders
             )
             if audio_data:
                 sample_rate, audio_np = audio_data
@@ -408,7 +415,7 @@ theme = gr.themes.Soft(
     button_primary_background_fill_hover="*primary_600",
 )
 
-def generate_first_ui(text, voice, speed, use_gpu, dict_text, skip_references, progress=gr.Progress()):
+def generate_first_ui(text, voice, speed, use_gpu, dict_text, skip_references, replace_em_dashes, clean_template_placeholders, progress=gr.Progress()):
     custom_dict = parse_custom_dict(dict_text)
     
     import time
@@ -439,15 +446,15 @@ def generate_first_ui(text, voice, speed, use_gpu, dict_text, skip_references, p
             
         progress(pct, desc=f"Elapsed: {elapsed_str} | ETA: {eta_str}")
 
-    return generate_first(text, voice, speed, use_gpu, custom_dict=custom_dict, skip_references=skip_references, progress_callback=update_progress)
+    return generate_first(text, voice, speed, use_gpu, custom_dict=custom_dict, skip_references=skip_references, replace_em_dashes=replace_em_dashes, clean_template_placeholders=clean_template_placeholders, progress_callback=update_progress)
 
-def tokenize_first_ui(text, voice, dict_text, skip_references):
+def tokenize_first_ui(text, voice, dict_text, skip_references, replace_em_dashes, clean_template_placeholders):
     custom_dict = parse_custom_dict(dict_text)
-    return tokenize_first(text, voice, custom_dict=custom_dict, skip_references=skip_references)
+    return tokenize_first(text, voice, custom_dict=custom_dict, skip_references=skip_references, replace_em_dashes=replace_em_dashes, clean_template_placeholders=clean_template_placeholders)
 
-def generate_all_ui(text, voice, speed, use_gpu, dict_text, skip_references):
+def generate_all_ui(text, voice, speed, use_gpu, dict_text, skip_references, replace_em_dashes, clean_template_placeholders):
     custom_dict = parse_custom_dict(dict_text)
-    yield from generate_all(text, voice, speed, use_gpu, custom_dict=custom_dict, skip_references=skip_references)
+    yield from generate_all(text, voice, speed, use_gpu, custom_dict=custom_dict, skip_references=skip_references, replace_em_dashes=replace_em_dashes, clean_template_placeholders=clean_template_placeholders)
 
 dark_mode_js = """
 function() {
@@ -497,6 +504,16 @@ def create_ui():
                         label="Auto-Skip Bibliographies & Abbreviations",
                         value=True,
                         info="Heuristically removes long reference lists before generation."
+                    )
+                    replace_em_dashes = gr.Checkbox(
+                        label="Replace Em Dashes with Pauses",
+                        value=True,
+                        info="Replaces em dashes with a comma to prompt natural pauses."
+                    )
+                    clean_template_placeholders = gr.Checkbox(
+                        label="Clean Template Placeholders",
+                        value=True,
+                        info="Replaces bracketed counseling placeholders with generic words."
                     )
                     dict_text = gr.Textbox(
                         label='Custom Pronunciation Dictionary', 
@@ -551,10 +568,17 @@ def create_ui():
                         with gr.Row():
                             strip_chapter_outlines = gr.Checkbox(label="Strip Repeated Chapter Outlines", value=True)
                             skip_discussion_questions = gr.Checkbox(label="Skip Discussion & Response Sections", value=True)
-                        with gr.Row():
                             strip_grid_matrices = gr.Checkbox(label="Strip Grid Matrices (OCR Table Garble)", value=True)
+                        with gr.Row():
                             skip_scripture_citations = gr.Checkbox(label="Skip Scripture Citations", value=True)
+                            export_expand_scripture_citations = gr.Checkbox(label="Expand Scripture References", value=False)
                             split_columns = gr.Checkbox(label="Split Double-Column PDFs", value=False)
+                        with gr.Row():
+                            export_format_epigraphs = gr.Checkbox(label="Format Epigraphs & Quotes", value=True)
+                            export_format_bullet_lists = gr.Checkbox(label="Format Bullet Sequences", value=True)
+                        with gr.Row():
+                            export_clean_template_placeholders = gr.Checkbox(label="Clean Template Placeholders", value=True)
+                            export_replace_em_dashes = gr.Checkbox(label="Replace Em Dashes with Pauses", value=True)
                         with gr.Row():
                             resume_export = gr.Checkbox(label="Resume Export (Skip existing files)", value=True)
                             combine_audio = gr.Checkbox(label="Combine into single audio file", value=False)
@@ -577,13 +601,13 @@ def create_ui():
         gatsby_btn.click(fn=get_gatsby, inputs=[], outputs=[text])
         frankenstein_btn.click(fn=get_frankenstein, inputs=[], outputs=[text])
         
-        generate_btn.click(fn=generate_first_ui, inputs=[text, voice, speed, use_gpu, dict_text, skip_references], outputs=[out_audio, out_ps])
-        tokenize_btn.click(fn=tokenize_first_ui, inputs=[text, voice, dict_text, skip_references], outputs=[out_ps])
+        generate_btn.click(fn=generate_first_ui, inputs=[text, voice, speed, use_gpu, dict_text, skip_references, replace_em_dashes, clean_template_placeholders], outputs=[out_audio, out_ps])
+        tokenize_btn.click(fn=tokenize_first_ui, inputs=[text, voice, dict_text, skip_references, replace_em_dashes, clean_template_placeholders], outputs=[out_ps])
         
-        stream_event = stream_btn.click(fn=generate_all_ui, inputs=[text, voice, speed, use_gpu, dict_text, skip_references], outputs=[out_stream])
+        stream_event = stream_btn.click(fn=generate_all_ui, inputs=[text, voice, speed, use_gpu, dict_text, skip_references, replace_em_dashes, clean_template_placeholders], outputs=[out_stream])
         stop_btn.click(fn=None, cancels=stream_event)
         
-        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations, split_columns], outputs=[download_file])
+        export_btn.click(fn=export_chapters_ui, inputs=[upload_file, voice, speed, chapter_regex, combine_audio, save_dir, sec_voice, dict_text, skip_references, skip_chapters_regex, audio_format, resume_export, meta_title, meta_author, strip_chapter_outlines, skip_discussion_questions, strip_grid_matrices, skip_scripture_citations, split_columns, export_format_epigraphs, export_format_bullet_lists, export_expand_scripture_citations, export_clean_template_placeholders, export_replace_em_dashes], outputs=[download_file])
         scan_abbrev_btn.click(fn=scan_abbreviations_ui, inputs=[upload_file, dict_text, split_columns], outputs=[dict_text])
         upload_file.change(fn=auto_extract_metadata, inputs=[upload_file], outputs=[meta_title, meta_author])
 
