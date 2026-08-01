@@ -60,12 +60,20 @@ def run_cli(args):
         return
 
     custom_dict = {}
-    if args.dict:
+    dict_path = args.dict
+    # @lat: [[cli#Custom Dictionary Auto-Discovery]]
+    if not dict_path:
+        auto_dict_path = os.path.splitext(args.input)[0] + '.custom_dict.txt'
+        if os.path.isfile(auto_dict_path):
+            logger.info(f"Auto-detected custom dictionary: {auto_dict_path}")
+            dict_path = auto_dict_path
+
+    if dict_path:
         try:
-            with open(os.path.expanduser(args.dict), 'r', encoding='utf-8') as f:
+            with open(os.path.expanduser(dict_path), 'r', encoding='utf-8') as f:
                 custom_dict.update(parse_custom_dict(f.read()) or {})
         except Exception as e:
-            logger.error(f"Error reading custom dictionary file '{args.dict}': {e}")
+            logger.error(f"Error reading custom dictionary file '{dict_path}': {e}")
             return
 
     if args.scan_abbrev:
@@ -247,10 +255,10 @@ def build_parser():
     parser.add_argument('--list-voices', action='store_true', default=False, help='List available voice IDs and exit')
     parser.add_argument('--tokenize', action='store_true', default=False, help='Print phonemes for each chapter instead of synthesizing audio')
     parser.add_argument('--scan-abbrev', action='store_true', help='Scan for unrecognized abbreviations and prompt interactively to expand them')
-    parser.add_argument('--dict', type=str, default=None, help="Path to a custom pronunciation dictionary file ('Key: Value' per line)")
+    parser.add_argument('--dict', type=str, default=None, help="Path to a custom pronunciation dictionary file ('Key: Value' per line). If omitted, auto-loads '<input>.custom_dict.txt' next to --input if present")
     parser.add_argument('--title', type=str, help='Manual override for Title metadata (used in filenames)')
     parser.add_argument('--author', type=str, help='Manual override for Author metadata (used in filenames)')
-    parser.add_argument('--format', type=str, choices=['wav', 'mp3'], default='wav', help='Output audio format')
+    parser.add_argument('--format', type=str, choices=['wav', 'mp3'], default='mp3', help='Output audio format')
     parser.add_argument('--bitrate', type=str, default='192k', help='MP3 bitrate (e.g. 192k, 64k, 32k)')
     parser.add_argument('--combine', action='store_true', default=False, help='Combine all chapters into a single audio file')
     parser.add_argument('--resume', action='store_true', default=True, help='Skip chapters whose output file already exists')
