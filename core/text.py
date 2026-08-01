@@ -203,6 +203,9 @@ def normalize_text(text, custom_dict=None, skip_references=True, replace_em_dash
     # Standardize line endings and whitespace
     text = text.replace('\r\n', '\n').strip()
     
+    # Normalize smart quotes and apostrophes to standard ASCII to prevent 's from being split
+    text = text.replace('“', '"').replace('”', '"').replace('‘', "'").replace('’', "'")
+    
     # Remove footnote markers like [1], [12], (1), ^1
     text = re.sub(r'\[\d+\]|\(\d+\)|\^\d+', '', text)
     
@@ -748,6 +751,23 @@ def clean_filename(name):
     cleaned = re.sub(r'[\\/*?:"<>|\x00]', "", name)
     cleaned = re.sub(r'\s+', " ", cleaned)
     return cleaned.strip()
+
+# @lat: [[tests#Text Preprocessors#Custom pronunciation dictionary parsing]]
+def parse_custom_dict(text):
+    """
+    Parses a 'Key: Value' per-line custom pronunciation dictionary.
+    Blank lines and lines without a colon are ignored.
+    """
+    if not text or not text.strip():
+        return None
+    d = {}
+    for line in text.split('\n'):
+        if ':' in line:
+            k, v = line.split(':', 1)
+            k_clean = k.strip()
+            if k_clean:
+                d[k_clean] = v.strip()
+    return d
 
 def extract_metadata_from_pdf(pdf_path):
     """

@@ -26,9 +26,6 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Gradio / HuggingFace temporary files
-flagged/
-*.gradio/
 *.log
 
 # Audio outputs
@@ -38,13 +35,10 @@ flagged/
 *.ogg
 
 # Input manuscripts / sample text (kept locally, not tracked)
-/en.txt
-/frankenstein5k.md
-/gatsby5k.md
-/examples.md
-/john_sheffield_introduction.txt
-/wbc_john_introduction.txt
-txt_files/*.txt
+sample_texts/*
+
 
 # Other-tool local config
 .antigravitycli/
+.claude
+.mcp.json

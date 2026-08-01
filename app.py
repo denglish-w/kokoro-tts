@@ -23,26 +23,26 @@ from cli import parse_args
 
 if __name__ == '__main__':
     args, unknown = parse_args()
-    
-    if args.input:
-        logger.info("Starting in CLI mode...")
-        from cli import run_cli
-        run_cli(args)
-    else:
-        logger.info("Starting in Web UI mode...")
-        from ui.app import create_ui, theme, custom_css, dark_mode_js
-        app = create_ui()
-        
-        # Get configuration from environment variables
-        port = int(os.environ.get("KOKORO_PORT", 40001))
-        host = os.environ.get("KOKORO_HOST", "0.0.0.0")
-        api_open = os.environ.get("KOKORO_API_OPEN", "True").lower() == "true"
-        
-        logger.info(f"Launching Gradio UI on {host}:{port}")
-        app.queue(api_open=api_open).launch(
-            server_name=host, 
-            server_port=port,
-            theme=theme,
-            css=custom_css,
-            js=dark_mode_js
-        )
+
+    if args.list_voices:
+        from core.voices import CHOICES
+        for label, voice_id in CHOICES.items():
+            print(f"{voice_id:15s} {label}")
+        sys.exit(0)
+
+    # Fallback: if --input is not set, look for any existing file in the unknown positional arguments
+    if not args.input and unknown:
+        for arg in unknown:
+            clean_arg = arg.strip('\'"')
+            if os.path.isfile(clean_arg):
+                args.input = clean_arg
+                break
+
+    if not args.input:
+        from cli import build_parser
+        build_parser().print_help()
+        sys.exit(1)
+
+    logger.info(f"Starting synthesis with input: {args.input}")
+    from cli import run_cli
+    run_cli(args)

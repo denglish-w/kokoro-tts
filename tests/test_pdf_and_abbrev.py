@@ -4,6 +4,7 @@ from core.text import scan_for_potential_abbreviations, extract_text_from_pdf, e
 
 class TestPdfAndAbbrev(unittest.TestCase):
     
+    # @lat: [[tests#PDF & Abbreviation Scanning#Abbreviation scan counts and exclusions]]
     def test_scan_for_potential_abbreviations(self):
         text = """
         This is a test document talking about XYZACR and DSS, which are scholarly acronyms.
@@ -37,6 +38,7 @@ class TestPdfAndAbbrev(unittest.TestCase):
         candidates_with_custom = scan_for_potential_abbreviations(text, custom_dict)
         self.assertNotIn("MYACR", candidates_with_custom)
         
+    # @lat: [[tests#PDF & Abbreviation Scanning#PDF text extraction concatenation]]
     @patch('pypdf.PdfReader')
     def test_extract_text_from_pdf(self, mock_pdf_reader):
         # Mocking PdfReader to simulate page text extraction
@@ -55,6 +57,7 @@ class TestPdfAndAbbrev(unittest.TestCase):
         self.assertEqual(extracted_text, "Page 1 Content with WBC.\nPage 2 Content with DSS.")
         mock_pdf_reader.assert_called_once_with("dummy_path.pdf")
 
+    # @lat: [[tests#PDF & Abbreviation Scanning#Metadata extraction from text formats]]
     def test_extract_metadata_from_text(self):
         # 1. YAML frontmatter test
         yaml_text = """---

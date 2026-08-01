@@ -1,16 +1,7 @@
 import torch
 import logging
 
-try:
-    import spaces
-except ImportError:
-    class spaces:
-        @staticmethod
-        def GPU(duration=None):
-            return lambda x: x
-
 from kokoro import KModel, KPipeline
-import gradio as gr
 from core.text import normalize_text
 
 logger = logging.getLogger(__name__)
@@ -39,8 +30,9 @@ def get_model(use_gpu):
 pipelines = {lang_code: KPipeline(lang_code=lang_code, model=False) for lang_code in 'ab'}
 pipelines['a'].g2p.lexicon.golds['kokoro'] = 'kˈOkəɹO'
 pipelines['b'].g2p.lexicon.golds['kokoro'] = 'kˈQkəɹQ'
+pipelines['a'].g2p.lexicon.golds['breathed'] = 'bɹˈiːðd'
+pipelines['b'].g2p.lexicon.golds['breathed'] = 'bɹˈiːðd'
 
-@spaces.GPU(duration=30)
 def forward_gpu(ps, ref_s, speed):
     return get_model(True)(ps, ref_s, speed)
 
@@ -68,16 +60,10 @@ def generate_first(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'),
         except Exception as e:
             logger.warning(f"Error during GPU generation: {e}. Falling back to CPU.")
             if use_gpu:
-                try:
-                    gr.Warning(str(e))
-                    gr.Info('Retrying with CPU. To avoid this error, change Hardware to CPU.')
-                except Exception:
-                    pass
+                logger.info('Retrying with CPU. To avoid this error, use --cpu.')
                 audio = get_model(False)(ps, ref_s, speed)
             else:
-                if isinstance(e, gr.exceptions.Error):
-                    raise gr.Error(e)
-                raise e
+                raise
         all_audio.append(audio)
         all_ps.append(ps)
         
@@ -97,39 +83,3 @@ def tokenize_first(text, voice='am_michael', custom_dict=None, skip_references=T
     for _, ps, _ in pipeline(text, voice):
         all_ps.append(ps)
     return ' '.join(all_ps)
- 
-def generate_all(text, voice='am_michael', speed=1, use_gpu=(DEVICE != 'cpu'), custom_dict=None, skip_references=True, replace_em_dashes=True, clean_template_placeholders=True):
-    text = normalize_text(text, custom_dict, skip_references=skip_references, replace_em_dashes=replace_em_dashes, clean_template_placeholders=clean_template_placeholders)
-    pipeline = pipelines[voice[0]]
-    pack = pipeline.load_voice(voice)
-    use_gpu = use_gpu and (DEVICE != 'cpu')
-    first = True
-    
-    logger.debug(f"Streaming generation for text: '{text[:50]}...' with voice {voice}")
-    for _, ps, _ in pipeline(text, voice, speed):
-        ref_s = pack[len(ps)-1]
-        if use_gpu:
-            ref_s = ref_s.to(DEVICE)
-            
-        try:
-            if use_gpu:
-                audio = forward_gpu(ps, ref_s, speed)
-            else:
-                audio = get_model(False)(ps, ref_s, speed)
-        except Exception as e:
-            logger.warning(f"Error during GPU generation stream: {e}. Falling back to CPU.")
-            if use_gpu:
-                try:
-                    gr.Warning(str(e))
-                    gr.Info('Switching to CPU')
-                except Exception:
-                    pass
-                audio = get_model(False)(ps, ref_s, speed)
-            else:
-                if isinstance(e, gr.exceptions.Error):
-                    raise gr.Error(e)
-                raise e
-        yield 24000, audio.numpy()
-        if first:
-            first = False
-            yield 24000, torch.zeros(1).numpy()

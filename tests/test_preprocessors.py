@@ -5,11 +5,13 @@ from core.text import (
     format_epigraphs_logic,
     format_bullet_lists_logic,
     expand_scripture_citations_logic,
-    clean_placeholders
+    clean_placeholders,
+    parse_custom_dict
 )
 
 class TestPreprocessors(unittest.TestCase):
     
+    # @lat: [[tests#Text Preprocessors#Title case heading]]
     def test_title_case_heading(self):
         self.assertEqual(title_case_heading("RELATE: LOOKING TO JESUS, THE AUTHOR AND FINISHER OF FAITH"),
                          "Relate: Looking to Jesus, the Author and Finisher of Faith")
@@ -17,11 +19,13 @@ class TestPreprocessors(unittest.TestCase):
                          "Others and Influence")
         self.assertEqual(title_case_heading(""), "")
         
+    # @lat: [[tests#Text Preprocessors#Chapter header normalization]]
     def test_normalize_chapter_header(self):
         chapter_text = "CHAPTER 12\n\nRELATE: LOOKING TO JESUS, THE AUTHOR AND FINISHER OF FAITH\n\nSome body text."
         expected = "Chapter 12: Relate — Looking to Jesus, the Author and Finisher of Faith\n\n\nSome body text."
         self.assertEqual(normalize_chapter_header(chapter_text), expected)
         
+    # @lat: [[tests#Text Preprocessors#Epigraph formatting]]
     def test_format_epigraphs_logic(self):
         text = """If faith is the sole condition of the Divine act of grace
 which makes the beginning of the new life,
@@ -35,6 +39,7 @@ Next paragraph starts here."""
         expected = '\n... Quote by Franklin Weidner: "If faith is the sole condition of the Divine act of grace which makes the beginning of the new life, then it alone can be also the condition of every furthering of that life." ...\n\n\nNext paragraph starts here.'
         self.assertEqual(format_epigraphs_logic(text), expected)
         
+    # @lat: [[tests#Text Preprocessors#Bullet list formatting]]
     def test_format_bullet_lists_logic(self):
         text = """Questions to Ask:
     •      What do you think this situation shows?
@@ -45,6 +50,7 @@ Next paragraph starts here."""
     Second, What do you believe would be better?"""
         self.assertEqual(format_bullet_lists_logic(text), expected)
         
+    # @lat: [[tests#Text Preprocessors#Scripture citation expansion]]
     def test_expand_scripture_citations_logic(self):
         self.assertEqual(
             expand_scripture_citations_logic("(Eph. 4:26–32; Col. 3:8; James 1:19)"),
@@ -59,6 +65,7 @@ Next paragraph starts here."""
             "Look at (First Peter chapter 1, verse 14)"
         )
         
+    # @lat: [[tests#Text Preprocessors#Template placeholder cleaning]]
     def test_clean_placeholders(self):
         self.assertEqual(
             clean_placeholders("A key moment for you was when you [situation]; in response, you chose to [choice]."),
@@ -72,6 +79,24 @@ Next paragraph starts here."""
             clean_placeholders("And [Jesus] said..."),
             "And Jesus said..."
         )
+
+    # @lat: [[tests#Text Preprocessors#Custom pronunciation dictionary parsing]]
+    def test_parse_custom_dict(self):
+        self.assertEqual(
+            parse_custom_dict("Jon: John\nNT: New Testament"),
+            {"Jon": "John", "NT": "New Testament"}
+        )
+        self.assertEqual(
+            parse_custom_dict("Jon: John\n\nno colon here\n"),
+            {"Jon": "John"}
+        )
+        self.assertEqual(
+            parse_custom_dict("Time: 3:45 PM"),
+            {"Time": "3:45 PM"}
+        )
+        self.assertIsNone(parse_custom_dict(""))
+        self.assertIsNone(parse_custom_dict("   \n  "))
+        self.assertIsNone(parse_custom_dict(None))
 
 if __name__ == '__main__':
     unittest.main()

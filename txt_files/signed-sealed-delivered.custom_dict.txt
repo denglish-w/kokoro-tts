@@ -1,0 +1,8 @@
+WCF: Westminster Confession of Faith
+KJV: King James Version
+ESV: English Standard Version
+NIV: New International Version
+NLT: New Living Translation
+NRSV: New Revised Standard Version
+RTS: Reformed Theological Seminary
+BC: Before Christ
