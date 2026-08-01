@@ -2,31 +2,40 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Kokoro TTS: a local-only CLI (no web UI, no server, no open ports).
+  Tech stack: Python 3.12+, `kokoro` library (KModel, KPipeline).
+  Hardware: auto-detects CUDA, MPS, or CPU with fallback via get_model(use_gpu).
+  Architecture:
+    - app.py: entry point, arg parsing hand-off
+    - cli.py: argument parsing (build_parser) and batch synthesis loop (run_cli)
+    - core/engine.py: synthesis core, lazy-loaded models/pipelines via get_model()
+    - core/text.py: text normalization, chapter regex, custom pronunciation dictionary
+    - core/voices.py: CHOICES map of display labels to voice IDs
+  Default export path: ~/Documents/Kokoro_Exports
+  This project also maintains lat.md/ (structured architecture docs) — check it for
+  design intent before proposing changes, and keep it in sync with any code changes.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - Do not introduce a web UI, server, or network listener — this is a CLI-only tool
+    - Call out which layer is affected (app.py, cli.py, core/engine.py, core/text.py, core/voices.py)
+    - Note any hardware-fallback implications (CUDA/MPS/CPU) if synthesis behavior changes
+  tasks:
+    - Include a task to update lat.md/ if the change affects architecture, normalization, or CLI behavior
+    - Include a task to run `lat check` before archiving
 
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.
 # This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+operations:
+  apply:
+    guidance:
+      - Keep test summaries concise
+      - Verify no new runtime dependencies pull in a web/server framework
+  archive:
+    guidance:
+      - Summarize the archive outcome before finishing
+      - Confirm lat.md/ was updated and `lat check` passes if architecture changed
