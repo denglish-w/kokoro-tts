@@ -36,3 +36,15 @@ flagged/
 *.mp3
 *.flac
 *.ogg
+
+# Input manuscripts / sample text (kept locally, not tracked)
+/en.txt
+/frankenstein5k.md
+/gatsby5k.md
+/examples.md
+/john_sheffield_introduction.txt
+/wbc_john_introduction.txt
+txt_files/*.txt
+
+# Other-tool local config
+.antigravitycli/
